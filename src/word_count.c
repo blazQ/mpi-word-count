@@ -7,38 +7,37 @@
 #include "workload.h"
 #include "chnkcnt.h"
 #include "hashdict.h"
+#include "histogram.h"
 
 #define MASTER 0
 
 typedef enum {
-	MASTER_MODE, 
-	DIRECTORY_MODE
+	DEFAULT_MODE,
+	DIRECTORY_MODE,
+	FILE_FLAG,
+	FAILURE = -1
 } Mode;
-
-typedef struct{
-	int count;
-	char word[WORD_MAX];
-	// Possible optimization: add an "actual_word_length" field, to avoid calling strlen later.
-	// It would be easily taken from the hashdict "keylen" attribute
-} histogram_element;
-
-long get_local_histogram(histogram_element* local_elements, struct dictionary* dic);
-
-int MPI_Type_create_histogram(MPI_Datatype* histogram_element_dt);
 
 void usage_print(char* program_name);
 
 Mode mode_init(int argc, char* argv[]);
 
-
 int main(int argc, char* argv[]){
 	int rank, wsize;
 	long *localszs = NULL; 
 	double start, end;
-	Mode mode = mode_init(argc, argv);
+
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD, &wsize);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+	Mode mode = mode_init(argc, argv);
+
+	if(mode == FAILURE){
+		if(MASTER == rank)
+			usage_print(argv[0]);
+		exit(EXIT_FAILURE);
+	}
 
 	// Creating histogram datatype for partial result transfer
 	MPI_Datatype histogram_element_dt;
@@ -51,17 +50,23 @@ int main(int argc, char* argv[]){
 	// Obtaining all the files in the cwd
 	size_t total_size;
 	File_vector *file_list = NULL;
+	char* output_file = NULL;
 
 	// Depending on the mode
-	if(mode == DIRECTORY_MODE){
-		if(argc == 2)
-			get_file_vec(&file_list, &total_size, ".", argv[0]);
-		else
-			get_file_vec(&file_list, &total_size, argv[2], argv[0]);
-	}
+	if(mode == DEFAULT_MODE)
+		get_file_vec(&file_list, &total_size, ".", argv[0]);
 
-	else if(mode == MASTER_MODE){
-		; // Read files from a master file @todo
+	else if(mode == (DEFAULT_MODE + FILE_FLAG)){
+		get_file_vec(&file_list, &total_size, ".", argv[0]);
+		output_file = argv[2];
+	}
+	
+	else if(mode == DIRECTORY_MODE)
+		get_file_vec(&file_list, &total_size, argv[2], argv[0]);
+	
+	else if(mode == (DIRECTORY_MODE + FILE_FLAG)){
+		get_file_vec(&file_list, &total_size, argv[3], argv[0]);
+		output_file = argv[4];
 	}
 
 
@@ -91,6 +96,7 @@ int main(int argc, char* argv[]){
 		File_chunk curr_chunk = chunks_proc[rank]->chunks[i];
 		count_words_chunk(curr_chunk.file_name, curr_chunk.start, curr_chunk.end, dic);
 	}
+	//Logica di controllo per gli estremi @todo
 
 	// Freeing heap memory
 	for(int i = 0; i < wsize; i++)
@@ -107,11 +113,7 @@ int main(int argc, char* argv[]){
 	// Gathering the number of words to receive from each process
 	MPI_Gather(&snd_sz, 1, MPI_LONG, localszs, 1, MPI_LONG, 0, MPI_COMM_WORLD);
 
-	// Sending histograms to master @todo
-	// MPI Send bla bla bla @todo
-
 	if(MASTER == rank){
-
 		// Allocating space for wsize histogram_element[]
 		histogram_element **process_histograms = malloc(sizeof(*process_histograms)*wsize);
 		for(int i = 1; i < wsize; i++)
@@ -124,30 +126,25 @@ int main(int argc, char* argv[]){
 		}
 
 		// Merge histograms in one big histogram 
-		// Make it a function @todo
-		for(int i = 1; i < wsize; i++){
-			for(int j = 0; j < localszs[i]; j++){
-				char* cur_word = process_histograms[i][j].word;
-				size_t cur_len = strlen(process_histograms[i][j].word);
-				int cur_value = process_histograms[i][j].count;
+		merge_dict(dic, process_histograms, localszs, wsize);
 
-				if(dic_find(dic, cur_word, cur_len))
-            		*dic->value = *dic->value + cur_value;
-        		else{
-            		dic_add(dic, process_histograms[i][j].word, i);
-            		*dic->value = cur_value;
-        		}
-			}
-		}
-
+		FILE *output_file_pointer;
 		// Write to csv file @todo
 		// Make it a function @todo
+		if(mode == DEFAULT_MODE || mode == DIRECTORY_MODE){
+			output_file_pointer = stdout;
+		}
+		else {
+			output_file_pointer = fopen(output_file, "w+");
+		}
+
+		fprintf(output_file_pointer, "Word, Count\n");
 		for (int i = 0; i < dic->length; i++) {
 	        if (dic->table[i] != 0) {
 	            struct keynode *k = dic->table[i];
 	            while (k) {
 	                if(k->value)
-	                    fprintf(stdout, "Word: %s Count: %d\n", k->key, k->value);
+	                    fprintf(output_file_pointer, "%s, %d\n", k->key, k->value);
 	                k = k->next;
 	            }
 	        }
@@ -160,6 +157,7 @@ int main(int argc, char* argv[]){
 		free(localszs);
 	}
 	else {
+		// Sending histograms to master 
 		MPI_Send(local_elements, snd_sz, histogram_element_dt, 0, 0, MPI_COMM_WORLD);
 	}
 
@@ -177,73 +175,28 @@ int main(int argc, char* argv[]){
 	return 0;
 }
 
-long get_local_histogram(histogram_element* local_elements, struct dictionary* dic){
-	long j = 0;
-	for (int i = 0; i < dic->length; i++) {
-	    if (dic->table[i] != 0) {
-	        struct keynode *k = dic->table[i];
-	        while (k) {
-	            if(k->value){
-	            	// Making sure they are contiguous
-	            	memcpy(local_elements[j].word, k->key, k->len);
-	            	local_elements[j].count = k->value;
-	            	j++;
-	            }
-	            k = k->next;
-	        }
-	    }
-	}
-	return j;
-}
-
-int MPI_Type_create_histogram(MPI_Datatype* histogram_element_dt){
-	int count = 2;
-
-	int block_length[2] = {
-		1,
-		256
-	};
-
-	MPI_Aint displacements[2] = {
-		offsetof(histogram_element, count),
-		offsetof(histogram_element, word)
-	};
-
-	MPI_Datatype types[2] = {
-		MPI_INT,
-		MPI_CHAR
-	};
-
-	MPI_Type_create_struct(count, block_length, displacements, types, histogram_element_dt);
-
-	return MPI_Type_commit(histogram_element_dt);
-}
-
 void usage_print(char* exec_name){
-	fprintf(stderr, "Usage: %s [-fmd] source\n", exec_name);
+	fprintf(stderr, "Usage: %s [-d] <directory> [-f] <output_file>\n", exec_name);
 	fprintf(stderr, "Options:\n");
-	fprintf(stderr, "  -f : Source is a single file.\n");
-	fprintf(stderr, "  -d : Source is a directory.\n\tIf called with -d and no arguments, the cwd gets scanned.\n");;
-	fprintf(stderr, "  -m | Source is a master file containing the files to read. \n\n");
+	fprintf(stderr, "  -d : Specify directory\n");
+	fprintf(stderr, "  -f : Specify file\n");
+	fprintf(stderr, "  -df : Specify directory and file\n");
+	fprintf(stderr, "If you launch the executable without arguments it will scan the cwd.\n");
 }
 
 Mode mode_init(int argc, char* argv[]){
 	int opt;
-	Mode exec_mode = DIRECTORY_MODE;
+	Mode exec_mode = DEFAULT_MODE;
 
-	while((opt = getopt(argc, argv, "md")) != -1) {
+	while((opt = getopt(argc, argv, "df")) != -1) {
 		switch(opt){
-			case 'm': exec_mode = MASTER_MODE; break;
-			case 'd': exec_mode = DIRECTORY_MODE; break;
-			default:
-				usage_print(argv[0]);
-				exit(EXIT_FAILURE);
+			case 'd': exec_mode += DIRECTORY_MODE; break;
+			case 'f': exec_mode += FILE_FLAG; break;
 		}
 	}
 
-	if((argc < 2 || argc > 3) || (argc == 2 && exec_mode != DIRECTORY_MODE)){
-		usage_print(argv[0]);
-		exit(EXIT_FAILURE);
+	if((argc > 5) || (exec_mode == DIRECTORY_MODE && argc != 3) || (exec_mode == FILE_FLAG && argc != 3) || (exec_mode == (DIRECTORY_MODE+FILE_FLAG) && argc != 5)) {
+		exec_mode = FAILURE;
 	}
 
 	return exec_mode;

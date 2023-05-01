@@ -2,6 +2,9 @@
 ######################
 .DS_Store
 .DS_Store?
+
+# Executable files and logs#
+############################
 word_count
-word_count_log
-word_count_log?
+word_count_log*
+obj

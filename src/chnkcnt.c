@@ -29,7 +29,7 @@ char* count_words(char* buffer, struct dictionary* dic, size_t* lwlen){
         buffer++;
     }
     // Go back! If the buffer ended with a character there's a high chance the last word is truncated
-    // So we need to return it. In this way the caller can use his knowledge of the next buffer and of
+    // So we need to return it. In this way the caller can use his knowledge of the next buffer
     // to understand if the last word is truncated (it will be then merged with the first character of the next buffer)
     buffer--;
     char* return_word = NULL;
