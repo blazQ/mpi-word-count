@@ -4,7 +4,7 @@
 #include "chnkcnt.h"
 
 char* count_words(char* buffer, struct dictionary* dic, size_t* lwlen){
-    char current_word[256];
+    char current_word[WORD_MAX];
     size_t i = 0;
     while(*buffer){
         i = 0;
@@ -20,7 +20,7 @@ char* count_words(char* buffer, struct dictionary* dic, size_t* lwlen){
             *dic->value = *dic->value + 1;
         
         else if(i != 0){
-            dic_add(dic, strdup(current_word), i);
+            dic_add(dic, current_word, i);
             *dic->value = 1;
         }
         if(!*buffer)

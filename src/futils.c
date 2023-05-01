@@ -82,6 +82,7 @@ void free_file_list(File_list *list){
 
 long get_file_size(char *filename) {
     struct stat file_status;
+
     if (stat(filename, &file_status) < 0) {
         return -1;
     }
@@ -102,12 +103,19 @@ File_list* get_file_list(long* total_size, char* dir_path, char* executable_name
 
     File_list* list = make_file_list();
 
+    size_t dir_path_len = strlen(dir_path);
+    char rel_path[256];
+    rel_path[0] ='\0';
+    strcat(rel_path, dir_path);
+
     while ((de = readdir(dr)) != NULL)
         /* Only regular files and if it's not the executable */
         if(de->d_type == DT_REG && strcmp(de->d_name, executable_name)){ 
-            long current_size = get_file_size(de->d_name);
-            add_file_node(list, de->d_name, current_size);
+            strcat(rel_path, de->d_name);
+            long current_size = get_file_size(rel_path);
+            add_file_node(list, rel_path, current_size);
             *total_size+=current_size;
+            rel_path[dir_path_len] = '\0';
         }
 
     closedir(dr);
@@ -163,14 +171,26 @@ void get_file_vec(File_vector **vector, size_t* total_size, char* dir_path, char
         exit(1);
     }
 
+    size_t dir_path_len = strlen(dir_path);
+    char rel_path[256];
+    rel_path[0] ='\0';
+    strcat(rel_path, dir_path);
+    if(rel_path[dir_path_len-1] != '/'){
+        strcat(rel_path, "/");
+        dir_path_len++;
+    }
+
     int i = 0;
     while ((de = readdir(dr)) != NULL && i < MAX_FILES)
         /* Only regular files and if it's not the executable */
         if(de->d_type == DT_REG && strcmp(de->d_name, executable_name)){ 
-            long current_size = get_file_size(de->d_name);
-            file_push_back(vector, strdup(de->d_name), current_size);
+            strcat(rel_path, de->d_name);
+            long current_size = get_file_size(rel_path);
+            file_push_back(vector, strdup(rel_path), current_size);
             *total_size+=current_size;
             i++;
+            // Resetting rel path
+            rel_path[dir_path_len] = '\0';
         }
 
     closedir(dr);
@@ -181,7 +201,7 @@ void print_file_vec(File_vector **vector){
         fprintf(stderr, "\t-------------------------------\t\n");
         for(size_t i = 0; i < vector[0]->size; i++){
             File_info info = vector[0]->files[i];
-            fprintf(stderr, "\t%-20s\t\tsize: \t%8ld\n", info.file_name, info.file_size);
+            fprintf(stderr, "\t%-35s\t\tsize: \t%8ld\n", info.file_name, info.file_size);
         }
 }
 

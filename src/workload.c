@@ -18,7 +18,7 @@ void print_chunk(File_chunk* chunk){
     else
         type = "REGULAR";
 
-    fprintf(stderr, "\t%-20s\t\tstart: \t%8ld\tend: \t%8ld\ttype: \t%-8s\t\n", chunk->file_name, chunk->start, chunk->end, type);
+    fprintf(stderr, "\t%-35s\t\tstart: \t%8ld\tend: \t%8ld\ttype: \t%-8s\t\n", chunk->file_name, chunk->start, chunk->end, type);
 }
 
 File_chunk* get_chunk_at(Chunk_vector **vector, size_t position){

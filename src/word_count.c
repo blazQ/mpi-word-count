@@ -1,10 +1,7 @@
 #include <stdio.h>
-#include <dirent.h>
-#include <sys/types.h>
-#include <sys/stat.h>
+#include <unistd.h>
 #include <time.h>
 #include <stdlib.h>
-#include <string.h>
 #include "mpi.h"
 #include "futils.h"
 #include "workload.h"
@@ -13,21 +10,62 @@
 
 #define MASTER 0
 
+typedef enum {
+	MASTER_MODE, 
+	DIRECTORY_MODE
+} Mode;
+
+typedef struct{
+	int count;
+	char word[WORD_MAX];
+	// Possible optimization: add an "actual_word_length" field, to avoid calling strlen later.
+	// It would be easily taken from the hashdict "keylen" attribute
+} histogram_element;
+
+long get_local_histogram(histogram_element* local_elements, struct dictionary* dic);
+
+int MPI_Type_create_histogram(MPI_Datatype* histogram_element_dt);
+
+void usage_print(char* program_name);
+
+Mode mode_init(int argc, char* argv[]);
+
+
 int main(int argc, char* argv[]){
-	int rank, wsize; 
+	int rank, wsize;
+	long *localszs = NULL; 
 	double start, end;
+	Mode mode = mode_init(argc, argv);
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD, &wsize);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+	// Creating histogram datatype for partial result transfer
+	MPI_Datatype histogram_element_dt;
+	MPI_Type_create_histogram(&histogram_element_dt);
+
+	// Starting line for benchmarking
 	MPI_Barrier(MPI_COMM_WORLD);
 	start = MPI_Wtime();
 
 	// Obtaining all the files in the cwd
 	size_t total_size;
 	File_vector *file_list = NULL;
-	get_file_vec(&file_list, &total_size, ".", argv[0]);
 
-	// Printing the list of files and workloads
+	// Depending on the mode
+	if(mode == DIRECTORY_MODE){
+		if(argc == 2)
+			get_file_vec(&file_list, &total_size, ".", argv[0]);
+		else
+			get_file_vec(&file_list, &total_size, argv[2], argv[0]);
+	}
+
+	else if(mode == MASTER_MODE){
+		; // Read files from a master file @todo
+	}
+
+
+	// Printing the list of files 
 	if(MASTER == rank){
 		print_file_vec(&file_list);
 		fprintf(stderr, "\n\tTotal Size: %8ld bytes\n", total_size);
@@ -35,13 +73,13 @@ int main(int argc, char* argv[]){
 
 	// Dividing workloads
 	Chunk_vector **chunks_proc = malloc(sizeof(*chunks_proc) * wsize);
-	// Computing workload for all wsize processes (this function is defined in workload.h)
+	// Computing workload for all wsize processes
 	get_workload(chunks_proc, wsize, &file_list, total_size, file_list->size);
 
 	// Freeing heap memory
 	free(file_list);
 
-	// Printing the chunk list for each processor
+	// Printing the workload for each processor
 	if(MASTER == rank){
 		for(int i = 0; i < wsize; i++)
 			print_chunk_vec(&chunks_proc[i]);
@@ -54,33 +92,160 @@ int main(int argc, char* argv[]){
 		count_words_chunk(curr_chunk.file_name, curr_chunk.start, curr_chunk.end, dic);
 	}
 
-	// Sending histograms to master
-	// MPI Send bla bla bla
-
-	if(MASTER == rank){
-		// Merge histograms in one big histogram
-		// Write to csv file
-		for (int i = 0; i < dic->length; i++) {
-        if (dic->table[i] != 0) {
-            struct keynode *k = dic->table[i];
-            while (k) {
-                if(k->value)
-                    fprintf(stdout, "Word: %s Count: %d\n", k->key, k->value);
-                k = k->next;
-            }
-        }
-    }
-	}
-
+	// Freeing heap memory
 	for(int i = 0; i < wsize; i++)
 		free(chunks_proc[i]);
 	free(chunks_proc);
 
+	// Creating local histograms
+	histogram_element *local_elements = malloc(sizeof(*local_elements) * dic->count);
+	long snd_sz = get_local_histogram(local_elements, dic);
+
+	if(MASTER == rank)
+		localszs = malloc(sizeof(*localszs)*wsize);
+	
+	// Gathering the number of words to receive from each process
+	MPI_Gather(&snd_sz, 1, MPI_LONG, localszs, 1, MPI_LONG, 0, MPI_COMM_WORLD);
+
+	// Sending histograms to master @todo
+	// MPI Send bla bla bla @todo
+
+	if(MASTER == rank){
+
+		// Allocating space for wsize histogram_element[]
+		histogram_element **process_histograms = malloc(sizeof(*process_histograms)*wsize);
+		for(int i = 1; i < wsize; i++)
+			process_histograms[i] = malloc(sizeof(histogram_element) * localszs[i]);
+
+		// Receiving local histograms
+		MPI_Status status;
+		for(int i = 1; i < wsize; i++){
+			MPI_Recv(process_histograms[i], localszs[i], histogram_element_dt, i, 0, MPI_COMM_WORLD, &status);
+		}
+
+		// Merge histograms in one big histogram 
+		// Make it a function @todo
+		for(int i = 1; i < wsize; i++){
+			for(int j = 0; j < localszs[i]; j++){
+				char* cur_word = process_histograms[i][j].word;
+				size_t cur_len = strlen(process_histograms[i][j].word);
+				int cur_value = process_histograms[i][j].count;
+
+				if(dic_find(dic, cur_word, cur_len))
+            		*dic->value = *dic->value + cur_value;
+        		else{
+            		dic_add(dic, process_histograms[i][j].word, i);
+            		*dic->value = cur_value;
+        		}
+			}
+		}
+
+		// Write to csv file @todo
+		// Make it a function @todo
+		for (int i = 0; i < dic->length; i++) {
+	        if (dic->table[i] != 0) {
+	            struct keynode *k = dic->table[i];
+	            while (k) {
+	                if(k->value)
+	                    fprintf(stdout, "Word: %s Count: %d\n", k->key, k->value);
+	                k = k->next;
+	            }
+	        }
+    	}
+
+		// Freeing heap memory
+		for(int i = 0; i < wsize; i++)
+			free(process_histograms[i]);
+		free(process_histograms);
+		free(localszs);
+	}
+	else {
+		MPI_Send(local_elements, snd_sz, histogram_element_dt, 0, 0, MPI_COMM_WORLD);
+	}
+
 	MPI_Barrier(MPI_COMM_WORLD);
     end = MPI_Wtime();
+
+    // Freeing heap memory
+	dic_delete(dic);
+	free(local_elements);
+
     if(MASTER == rank)
     	fprintf(stderr, "\n\tTime elapsed: %f\n", end-start);
     MPI_Finalize();
 
 	return 0;
 }
+
+long get_local_histogram(histogram_element* local_elements, struct dictionary* dic){
+	long j = 0;
+	for (int i = 0; i < dic->length; i++) {
+	    if (dic->table[i] != 0) {
+	        struct keynode *k = dic->table[i];
+	        while (k) {
+	            if(k->value){
+	            	// Making sure they are contiguous
+	            	memcpy(local_elements[j].word, k->key, k->len);
+	            	local_elements[j].count = k->value;
+	            	j++;
+	            }
+	            k = k->next;
+	        }
+	    }
+	}
+	return j;
+}
+
+int MPI_Type_create_histogram(MPI_Datatype* histogram_element_dt){
+	int count = 2;
+
+	int block_length[2] = {
+		1,
+		256
+	};
+
+	MPI_Aint displacements[2] = {
+		offsetof(histogram_element, count),
+		offsetof(histogram_element, word)
+	};
+
+	MPI_Datatype types[2] = {
+		MPI_INT,
+		MPI_CHAR
+	};
+
+	MPI_Type_create_struct(count, block_length, displacements, types, histogram_element_dt);
+
+	return MPI_Type_commit(histogram_element_dt);
+}
+
+void usage_print(char* exec_name){
+	fprintf(stderr, "Usage: %s [-fmd] source\n", exec_name);
+	fprintf(stderr, "Options:\n");
+	fprintf(stderr, "  -f : Source is a single file.\n");
+	fprintf(stderr, "  -d : Source is a directory.\n\tIf called with -d and no arguments, the cwd gets scanned.\n");;
+	fprintf(stderr, "  -m | Source is a master file containing the files to read. \n\n");
+}
+
+Mode mode_init(int argc, char* argv[]){
+	int opt;
+	Mode exec_mode = DIRECTORY_MODE;
+
+	while((opt = getopt(argc, argv, "md")) != -1) {
+		switch(opt){
+			case 'm': exec_mode = MASTER_MODE; break;
+			case 'd': exec_mode = DIRECTORY_MODE; break;
+			default:
+				usage_print(argv[0]);
+				exit(EXIT_FAILURE);
+		}
+	}
+
+	if((argc < 2 || argc > 3) || (argc == 2 && exec_mode != DIRECTORY_MODE)){
+		usage_print(argv[0]);
+		exit(EXIT_FAILURE);
+	}
+
+	return exec_mode;
+}
+

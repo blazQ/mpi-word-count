@@ -4,6 +4,7 @@
 #include "hashdict.h"
 
 #define BLOCKSIZE 2048
+#define WORD_MAX 256
 
 char* count_words(char* buffer, struct dictionary* dic, size_t* lwlen);
 
