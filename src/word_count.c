@@ -129,8 +129,6 @@ int main(int argc, char* argv[]){
 		merge_dict(dic, process_histograms, localszs, wsize);
 
 		FILE *output_file_pointer;
-		// Write to csv file @todo
-		// Make it a function @todo
 		if(mode == DEFAULT_MODE || mode == DIRECTORY_MODE){
 			output_file_pointer = stdout;
 		}
@@ -176,11 +174,11 @@ int main(int argc, char* argv[]){
 }
 
 void usage_print(char* exec_name){
-	fprintf(stderr, "Usage: %s [-d] <directory> [-f] <output_file>\n", exec_name);
+	fprintf(stderr, "Usage: %s [-d] [-f]  <directory> <output_file>\n", exec_name);
 	fprintf(stderr, "Options:\n");
 	fprintf(stderr, "  -d : Specify directory\n");
 	fprintf(stderr, "  -f : Specify file\n");
-	fprintf(stderr, "  -df : Specify directory and file\n");
+	fprintf(stderr, "  -d -f : Specify directory and file\n");
 	fprintf(stderr, "If you launch the executable without arguments it will scan the cwd.\n");
 }
 
