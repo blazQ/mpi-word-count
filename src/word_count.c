@@ -47,24 +47,24 @@ int main(int argc, char* argv[]){
 	MPI_Barrier(MPI_COMM_WORLD);
 	start = MPI_Wtime();
 
-	// Obtaining all the files in the cwd
+	// Obtaining all the files in the selected directory
 	size_t total_size;
 	File_vector *file_list = NULL;
 	char* output_file = NULL;
 
 	// Depending on the mode
-	if(mode == DEFAULT_MODE)
+	if(mode == DEFAULT_MODE)	// Reading from cwd
 		get_file_vec(&file_list, &total_size, ".", argv[0]);
 
-	else if(mode == (DEFAULT_MODE + FILE_FLAG)){
+	else if(mode == (DEFAULT_MODE + FILE_FLAG)){	// Reading from cwd with file output
 		get_file_vec(&file_list, &total_size, ".", argv[0]);
 		output_file = argv[2];
 	}
 	
-	else if(mode == DIRECTORY_MODE)
+	else if(mode == DIRECTORY_MODE) // Reading from selected directory
 		get_file_vec(&file_list, &total_size, argv[2], argv[0]);
 	
-	else if(mode == (DIRECTORY_MODE + FILE_FLAG)){
+	else {
 		get_file_vec(&file_list, &total_size, argv[3], argv[0]);
 		output_file = argv[4];
 	}
@@ -141,8 +141,9 @@ int main(int argc, char* argv[]){
 	        if (dic->table[i] != 0) {
 	            struct keynode *k = dic->table[i];
 	            while (k) {
-	                if(k->value)
-	                    fprintf(output_file_pointer, "%s, %d\n", k->key, k->value);
+	                if(k->value){
+	                    fprintf(output_file_pointer, "%.*s, %d\n", k->len, k->key, k->value);
+	                }
 	                k = k->next;
 	            }
 	        }

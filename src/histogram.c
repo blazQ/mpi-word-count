@@ -1,7 +1,9 @@
 #include <string.h>
+#include <stdio.h>
 #include "mpi.h"
 #include "hashdict.h"
 #include "histogram.h"
+
 
 void merge_dict(struct dictionary* dic, histogram_element** process_histograms, long* localszs, int wsize){
 	for(int i = 1; i < wsize; i++){
@@ -10,10 +12,11 @@ void merge_dict(struct dictionary* dic, histogram_element** process_histograms, 
 			size_t cur_len = strlen(process_histograms[i][j].word);
 			int cur_value = process_histograms[i][j].count;
 
-			if(dic_find(dic, cur_word, cur_len))
+			if(dic_find(dic, cur_word, cur_len)){
         		*dic->value = *dic->value + cur_value;
+        	}
     		else{
-        		dic_add(dic, process_histograms[i][j].word, i);
+        		dic_add(dic, process_histograms[i][j].word, cur_len);
         		*dic->value = cur_value;
     		}
 		}
@@ -61,3 +64,4 @@ int MPI_Type_create_histogram(MPI_Datatype* histogram_element_dt){
 
 	return MPI_Type_commit(histogram_element_dt);
 }
+
