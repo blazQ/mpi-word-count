@@ -1,5 +1,4 @@
 #include <string.h>
-#include <stdio.h>
 #include "mpi.h"
 #include "hashdict.h"
 #include "histogram.h"

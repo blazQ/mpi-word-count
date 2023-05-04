@@ -99,7 +99,7 @@ void get_workload(Chunk_vector** chunks_proc, int wsize, File_vector** file_list
                 int type;
                 if(start == 0)
                     type = FIRST;
-                else if((start+file_remaining) == cur_file.file_size)
+                else if((start+file_remaining) == cur_file.file_size && (start+file_remaining) < remaining_capacities[cur_proc])
                     type = LAST;
                 else
                     type = REGULAR;

@@ -94,9 +94,20 @@ int main(int argc, char* argv[]){
 	struct dictionary* dic = dic_new(0);
 	for(size_t i = 0; i < chunks_proc[rank]->size; i++){
 		File_chunk curr_chunk = chunks_proc[rank]->chunks[i];
-		count_words_chunk(curr_chunk.file_name, curr_chunk.start, curr_chunk.end, dic);
+		char* first_word = NULL;
+		char* last_word = count_words_chunk(curr_chunk.file_name, curr_chunk.start, curr_chunk.end, dic, &first_word);
+		//Logica di controllo per gli estremi 
+		if(curr_chunk.special_position == REGULAR){
+			sync_with_prev(last_word, rank, dic);
+			sync_with_next(first_word, rank, dic);
+		}
+		else if(curr_chunk.special_position == FIRST){
+			sync_with_prev(last_word, rank, dic);
+		}
+		else if(curr_chunk.special_position == LAST){
+			sync_with_next(first_word, rank, dic);
+		}
 	}
-	//Logica di controllo per gli estremi @todo
 
 	// Freeing heap memory
 	for(int i = 0; i < wsize; i++)
@@ -136,6 +147,7 @@ int main(int argc, char* argv[]){
 			output_file_pointer = fopen(output_file, "w+");
 		}
 
+		// Make it a function so it's less verbose? @todo
 		fprintf(output_file_pointer, "Word, Count\n");
 		for (int i = 0; i < dic->length; i++) {
 	        if (dic->table[i] != 0) {
