@@ -3,15 +3,15 @@ OBJ_DIR := obj
 BIN_DIR := .
 CC=mpicc
 
-EXE := $(BIN_DIR)/word_count
+EXE := $(BIN_DIR)/word_count.out
 
 SRC := $(wildcard $(SRC_DIR)/*.c)
 
 OBJ := $(SRC:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 
 CPPFLAGS:= -Iinclude -MMD -MP
-CFLAGS:= -Wall
-LDFLAGS:= 
+CFLAGS:= -Wall -Wextra -Wpedantic
+LDFLAGS:=
 LDLIBS:= 
 
 .PHONY: all clean

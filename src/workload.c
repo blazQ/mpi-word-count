@@ -41,7 +41,7 @@ int chunk_push_back(Chunk_vector **vector, char* file_name, long start, long end
         if (!temp) {return 1; }
         *vector = temp;
     }
-
+    
     vector[0]->chunks[x].file_name = file_name;
     vector[0]->chunks[x].start = start;
     vector[0]->chunks[x].end = end;
@@ -78,6 +78,7 @@ void get_workload(Chunk_vector** chunks_proc, int wsize, File_vector** file_list
     size_t cur_proc = 0;
     for(size_t i = 0; i < nofiles; i++){
         File_info cur_file = file_list[0]->files[i];
+        //fprintf(stderr, "Name: %s Size: %ld\n", cur_file.file_name, cur_file.file_size);
         size_t start = 0;
         size_t file_remaining = cur_file.file_size;
         while(file_remaining){

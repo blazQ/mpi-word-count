@@ -5,6 +5,6 @@
 
 # Executable files and logs#
 ############################
-word_count
-word_count_log*
+word_count*
 obj
+output*

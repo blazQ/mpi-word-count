@@ -146,7 +146,9 @@ char* count_words_chunk(char* file_name, long start, long end, struct dictionary
 void sync_with_prev(char* last_word, int rank, struct dictionary* dic){
     MPI_Status status;
     char fw_recv[256];
-    long lw_len = last_word ? strlen(last_word): -1;
+    long lw_len = -1;
+    if(last_word)
+        lw_len = strlen(last_word);
     long fw_len;
     int response = 1;
 
@@ -159,6 +161,7 @@ void sync_with_prev(char* last_word, int rank, struct dictionary* dic){
             memcpy(missing_word+lw_len, fw_recv, fw_len);
             missing_word[fw_len+lw_len] = '\0';
 
+            // Make it a function so it's less verbose. It's practically everywhere @todo
             if(dic_find(dic, missing_word, fw_len+lw_len))
                 *dic->value = *dic->value + 1;
             else {

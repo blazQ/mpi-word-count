@@ -78,6 +78,9 @@ int main(int argc, char* argv[]){
 
 	// Dividing workloads
 	Chunk_vector **chunks_proc = malloc(sizeof(*chunks_proc) * wsize);
+	for(int i = 0; i < wsize; i++)
+		chunks_proc[i] = NULL;
+
 	// Computing workload for all wsize processes
 	get_workload(chunks_proc, wsize, &file_list, total_size, file_list->size);
 
@@ -91,28 +94,49 @@ int main(int argc, char* argv[]){
 	}
 
 	// Counting words
+	sync_info* special_chunks = malloc(sizeof(*special_chunks) * 2);
+	special_chunks[0].chunk_type = -1;
+	special_chunks[1].chunk_type = -1;
+
 	struct dictionary* dic = dic_new(0);
-	for(size_t i = 0; i < chunks_proc[rank]->size; i++){
+	for(size_t i = 0, j = 0; i < chunks_proc[rank]->size; i++){
 		File_chunk curr_chunk = chunks_proc[rank]->chunks[i];
 		char* first_word = NULL;
 		char* last_word = count_words_chunk(curr_chunk.file_name, curr_chunk.start, curr_chunk.end, dic, &first_word);
-		//Logica di controllo per gli estremi 
-		if(curr_chunk.special_position == REGULAR){
-			sync_with_prev(last_word, rank, dic);
-			sync_with_next(first_word, rank, dic);
+		if(curr_chunk.special_position != UNIQUE){
+			special_chunks[j].last_word = last_word ? strdup(last_word): NULL;
+			special_chunks[j].first_word = first_word ? strdup(first_word): NULL;
+			special_chunks[j].chunk_type = curr_chunk.special_position;
+			j++;
 		}
-		else if(curr_chunk.special_position == FIRST){
-			sync_with_prev(last_word, rank, dic);
+
+		// Freeing heap memory
+		if(first_word)
+			free(first_word);
+		if(last_word)
+			free(last_word);
+	}
+
+	for(int i = 0; i < 2; i++){
+		if(special_chunks[i].chunk_type==FIRST){
+			sync_with_prev(special_chunks[i].last_word, rank, dic);
 		}
-		else if(curr_chunk.special_position == LAST){
-			sync_with_next(first_word, rank, dic);
+		else if(special_chunks[i].chunk_type == LAST){
+			sync_with_next(special_chunks[i].first_word, rank, dic);
+		}
+		else if(special_chunks[i].chunk_type == REGULAR){
+			sync_with_prev(special_chunks[i].last_word, rank, dic);
+			sync_with_next(special_chunks[i].first_word, rank, dic);
 		}
 	}
+
 
 	// Freeing heap memory
 	for(int i = 0; i < wsize; i++)
 		free(chunks_proc[i]);
 	free(chunks_proc);
+
+	free(special_chunks);
 
 	// Creating local histograms
 	histogram_element *local_elements = malloc(sizeof(*local_elements) * dic->count);
@@ -148,6 +172,7 @@ int main(int argc, char* argv[]){
 		}
 
 		// Make it a function so it's less verbose? @todo
+		// Printing to output_file
 		fprintf(output_file_pointer, "Word, Count\n");
 		for (int i = 0; i < dic->length; i++) {
 	        if (dic->table[i] != 0) {
@@ -162,8 +187,6 @@ int main(int argc, char* argv[]){
     	}
 
 		// Freeing heap memory
-		for(int i = 0; i < wsize; i++)
-			free(process_histograms[i]);
 		free(process_histograms);
 		free(localszs);
 	}
@@ -181,6 +204,8 @@ int main(int argc, char* argv[]){
 
     if(MASTER == rank)
     	fprintf(stderr, "\n\tTime elapsed: %f\n", end-start);
+
+    MPI_Type_free(&histogram_element_dt);
     MPI_Finalize();
 
 	return 0;

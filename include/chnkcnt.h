@@ -6,6 +6,12 @@
 #define BLOCKSIZE 2048
 #define WORD_MAX 256
 
+typedef struct{
+	char* first_word;
+	char* last_word;
+	int chunk_type;
+} sync_info;
+
 char* count_words(char* buffer, struct dictionary* dic, size_t* lwlen);
 
 char* recover_missing_word(char* buffer, char* previous_portion, size_t lwlen, size_t* b4_space);
