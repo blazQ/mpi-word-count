@@ -159,6 +159,7 @@ void sync_with_prev(char* last_word, int rank, struct dictionary* dic){
             memcpy(missing_word+lw_len, fw_recv, fw_len);
             missing_word[fw_len+lw_len] = '\0';
 
+            // Make it a function so it's less verbose. It's practically everywhere @todo
             if(dic_find(dic, missing_word, fw_len+lw_len))
                 *dic->value = *dic->value + 1;
             else {
