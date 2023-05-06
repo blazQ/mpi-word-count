@@ -136,6 +136,17 @@ int main(int argc, char* argv[]){
 		free(chunks_proc[i]);
 	free(chunks_proc);
 
+<<<<<<< HEAD
+=======
+	for(int i = 0; i < 2; i++){
+		char* first_word = special_chunks[i].first_word;
+		char* last_word = special_chunks[i].last_word;
+		if(first_word)
+			free(first_word);
+		if(last_word)
+			free(last_word);
+	}
+>>>>>>> 1cb74c44fdf5de85cb5d7cee6a64a916c4d0dab4
 	free(special_chunks);
 
 	// Creating local histograms
