@@ -51,5 +51,10 @@ Passing "." as the input directory makes it scan the cwd. Executing word_count w
 
 A simple workload recap is printed on the stderr, regardless.
 
+ATTENTION:
+Running it inside a container might require using the following launch options in order to avoid errors:
+```
+mpirun --allow-run-as-root --mca btl_vader_single_copy_mechanism none -np X ./word_count.out -d -f ./data/books output_file.csv
+```
 # credits 
 Book files dataset courtesy of [TEXT FILES](http://textfiles.com).
