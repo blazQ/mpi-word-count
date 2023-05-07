@@ -10,14 +10,14 @@ I've considered three general ways of dividing the files between the processors:
   - Splitting based on the number of lines
   - Splitting based on file sizes
 
-The first one is not efficient enough when the filesize varies greatly between files in the directory, causing an uneven workload distribution, while the second one has problems when the line length is not the same between the files.
+The first one is not efficient enough when the filesize, which is the actual measure of input complexity, varies greatly between files in the directory, causing an uneven workload distribution, while the second one has problems when the line length is not the same between the files.
 The third one, while being slightly more difficult to implement, ensures a perfectly balanced workload distribution between each process.
 
 The problem this approach poses is that a single file could, theoretically, be processed by more than one process. So a word could be split between 2 processes, and thus, the final count would be wrong.
 
 To avoid this, synchronization logic must be inserted in the final solution, in order to recover the "missing word".
 
-This synchronization logic must be implement in such a way as to avoid unnecessary communication overhead and lose all of the gains of parallelization.
+This synchronization logic must be implemented in such a way as to avoid unnecessary communication overhead and loss of all the gains of parallelization.
 
 There are certainly other important aspects of the general solution: the use of an hashtable for fast lookup of each word and their respective counts, the use of MPI derived datatypes to optimize comunications and so on. Each of this will be detailed in the following sections.
 
@@ -56,5 +56,32 @@ Running it inside a container might require using the following launch options i
 ```
 mpirun --allow-run-as-root --mca btl_vader_single_copy_mechanism none -np X ./word_count.out -d -f ./data/books output_file.csv
 ```
+
+# correctness
+The parsing algorithm is based con the definition of alphanumeric character. 
+
+Basically, this means that a word begins with an alphanumeric character and ends with an alphanumeric character.
+Examples of words following this definition could be "house", "cat", "xiii", "154", "pag2" and so on.
+Since this definition doesn't include characters like "-" for obvious reasons, words like "volupt-uousness" are supposed to be split into "volupt" and "uousness" and so on.
+
+To easily test the correctness of the algorithm, you can simply compare it with the results of other utilities (like notepad++ or sublime text) that grant you the ability to search for whole words (not only substrings).
+Since doing this by hand could require a lot of time, you can simply execute the program with 1 processor and then compare the output with the execution with n processors, like this:
+
+```
+mpirun --allow-run-as-root --mca btl_vader_single_copy_mechanism none -np 1 ./word_count.out -d -f ./data/books output1.csv
+mpirun --allow-run-as-root --mca btl_vader_single_copy_mechanism none -np 2 ./word_count.out -d -f ./data/books output2.csv
+mpirun --allow-run-as-root --mca btl_vader_single_copy_mechanism none -np 3 ./word_count.out -d -f ./data/books output3.csv
+...
+sort output1.csv > output1s
+sort output2.csv > output2s
+sort output3.csv > output3s
+...
+diff -s output1s output2s
+diff -s output2s output3s
+diff -s output1s output3s
+...
+```
+Clearly the use of sort and diff is reminiscent towards Linux or other UNIX operating systems, but you can swap it for the equivalent command on your OS.
+
 # credits 
 Book files dataset courtesy of [TEXT FILES](http://textfiles.com).
