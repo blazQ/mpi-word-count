@@ -38,7 +38,7 @@ File_node* create_node(char* file_name, long file_size){
     return new_node;
 }
 
-File_list* make_file_list(){
+File_list* make_file_list(void){
     File_list *list = malloc(sizeof(File_list));
     if(!list){
         return NULL;
