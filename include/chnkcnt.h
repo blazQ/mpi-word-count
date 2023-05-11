@@ -2,6 +2,7 @@
 #define CHNKCNT_H
 
 #include "hashdict.h"
+#include "mpi.h"
 
 #define BLOCKSIZE 2048
 #define WORD_MAX 256
@@ -18,8 +19,8 @@ char* recover_missing_word(char* buffer, char* previous_portion, size_t lwlen, s
 
 char* count_words_chunk(char* file_name, long start, long end, struct dictionary* dic, char** first_word);
 
-void sync_with_prev(char* last_word, int rank, struct dictionary* dic);
+void sync_with_next(char* last_word, int rank, struct dictionary* dic, MPI_Comm comm);
 
-void sync_with_next(char* fw_word, int rank, struct dictionary* dic);
+void sync_with_prev(char* fw_word, int rank, struct dictionary* dic, MPI_Comm comm);
 
 #endif

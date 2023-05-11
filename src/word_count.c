@@ -119,14 +119,14 @@ int main(int argc, char* argv[]){
 
 	for(int i = 0; i < 2; i++){
 		if(special_chunks[i].chunk_type==FIRST){
-			sync_with_prev(special_chunks[i].last_word, rank, dic);
+			sync_with_next(special_chunks[i].last_word, rank, dic, MPI_COMM_WORLD);
 		}
 		else if(special_chunks[i].chunk_type == LAST){
-			sync_with_next(special_chunks[i].first_word, rank, dic);
+			sync_with_prev(special_chunks[i].first_word, rank, dic, MPI_COMM_WORLD);
 		}
 		else if(special_chunks[i].chunk_type == REGULAR){
-			sync_with_prev(special_chunks[i].last_word, rank, dic);
-			sync_with_next(special_chunks[i].first_word, rank, dic);
+			sync_with_prev(special_chunks[i].first_word, rank, dic, MPI_COMM_WORLD);
+			sync_with_next(special_chunks[i].last_word, rank, dic, MPI_COMM_WORLD);
 		}
 	}
 
@@ -146,7 +146,7 @@ int main(int argc, char* argv[]){
 		localszs = malloc(sizeof(*localszs)*wsize);
 	
 	// Gathering the number of words to receive from each process
-	MPI_Gather(&snd_sz, 1, MPI_LONG, localszs, 1, MPI_LONG, 0, MPI_COMM_WORLD);
+	MPI_Gather(&snd_sz, 1, MPI_LONG, localszs, 1, MPI_LONG, MASTER, MPI_COMM_WORLD);
 
 	if(MASTER == rank){
 		// Allocating space for wsize histogram_element[]
@@ -192,7 +192,7 @@ int main(int argc, char* argv[]){
 	}
 	else {
 		// Sending histograms to master 
-		MPI_Send(local_elements, snd_sz, histogram_element_dt, 0, 0, MPI_COMM_WORLD);
+		MPI_Send(local_elements, snd_sz, histogram_element_dt, MASTER, 0, MPI_COMM_WORLD);
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);

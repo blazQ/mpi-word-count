@@ -115,8 +115,15 @@ Logic for chunks marked as "LAST" is the same, but reversed. "LAST" is always th
 A LAST can be potentially followed by a FIRST, and a FIRST can be preceded by a LAST. A REGULAR is always alone. Hence, the number of special chunks is at most 2.
 
 ## chnkcnt.h
-This header defines how to count words inside a chunk and how to avoid losing coherency inbetween a single process.
-@TODO
+This header defines the functions that get used to count words inside a file.
+I won't go into details about the counting itself since you can image how it works, but this header also contains functions to synchronize results between chunks.
+They are called sync_with_prev and synch_with_next, and as you can image they are used to synchronize with the previous process or the next in line.
+
+sync_with_prev gets executed when the current chunk isn't the first of its file, so for example "LAST" or "REGULAR". If the current chunk begins with a word, not a space or other characters not considered to be alphanumeric, the word gets propagated backwards. The previous element will respond according to how its own chunk ends, so we can remove the partial word from the hasbtable.
+
+sync_with_next has the same logic in reverse. It gets executed when the chunk is the "FIRST", or "REGULAR". That basically means that we need to check if the chunk ends with a word, and if it does, and we receive confirmation from the next process that its own chunk begins with a word, we can then proceed to merge them and update the hashtable with correct values.
+
+This logic gets executed after the parallel counting of the words, in order to avoid losing too much performance. Alternative methods can obviously be used to improve performance further.
 
 ## histogram.h futils.h and hashdict.h
 These are simple helper headers that define the hashtable used to store words and counts, the file dynamic array used to contain the list of files and the histogram structure to permit communication of local results.
@@ -154,16 +161,17 @@ MPI_Type_create_struct(count, block_length, displacements, types, histogram_elem
 Simply clone the rep, use make and then run with the desired number of processes.
 
 You can specify -d, a directory and then -f and a file, where the results will be saved in CSV format.
+Example of use:
 ```
->git clone https://github.com/blazQ/mpi-word-count.git
->cd mpi-word-count
->make all
->make clean
->mpirun -np X ./word_count -d input_directory -f outputfile.csv
+git clone https://github.com/blazQ/mpi-word-count.git
+cd mpi-word-count
+make all
+make clean
+mpirun -np 3 ./word_count.out -d ./data/books -f output.csv
 ```
-You can also use -d and then specify a directory. It will print to stdout, so you'll have to redirect it to your desired output file.
+You can also use only -d and then specify a directory. It will print to stdout, so you'll have to redirect it to your desired output file.
 ```
->mpirun -np X ./word_count -d ./data/books >file_log_name.csv
+mpirun -np 3 ./word_count -d ./data/books >output.csv
 ```
 Passing "." as the input directory makes it scan the cwd. Executing word_count without any arguments simply makes it reading from the cwd and outputting to stdout.
 
@@ -172,7 +180,7 @@ A simple workload recap is printed on the stderr, regardless.
 ATTENTION:
 Running it inside a container might require using the following launch options in order to avoid errors:
 ```
->mpirun --allow-run-as-root --mca btl_vader_single_copy_mechanism none -np X ./word_count.out -d -f ./data/books output_file.csv
+mpirun --allow-run-as-root --mca btl_vader_single_copy_mechanism none -np X ./word_count.out -d ./data/books > output_file.csv
 ```
 
 # correctness
@@ -189,15 +197,14 @@ Since doing this by hand could require a lot of time, you can simply execute the
 mpirun --allow-run-as-root --mca btl_vader_single_copy_mechanism none -np 1 ./word_count.out -d -f ./data/books output1.csv
 mpirun --allow-run-as-root --mca btl_vader_single_copy_mechanism none -np 2 ./word_count.out -d -f ./data/books output2.csv
 mpirun --allow-run-as-root --mca btl_vader_single_copy_mechanism none -np 3 ./word_count.out -d -f ./data/books output3.csv
-...
+
 sort output1.csv > output1s
 sort output2.csv > output2s
 sort output3.csv > output3s
-...
+
 diff -s output1s output2s
 diff -s output2s output3s
 diff -s output1s output3s
-...
 ```
 Clearly the use of sort and diff is reminiscent towards Linux or other UNIX operating systems, but you can swap it for the equivalent command on your OS.
 

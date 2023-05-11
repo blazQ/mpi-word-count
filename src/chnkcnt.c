@@ -143,7 +143,7 @@ char* count_words_chunk(char* file_name, long start, long end, struct dictionary
     return isalnum(buffer[bytesread-1]) ? last_word : NULL;
 }
 
-void sync_with_prev(char* last_word, int rank, struct dictionary* dic){
+void sync_with_next(char* last_word, int rank, struct dictionary* dic, MPI_Comm comm){
     MPI_Status status;
     char fw_recv[256];
     long lw_len = -1;
@@ -152,9 +152,9 @@ void sync_with_prev(char* last_word, int rank, struct dictionary* dic){
     long fw_len;
     int response = 1;
 
-    MPI_Recv(&fw_len, 1, MPI_LONG, rank+1, 0, MPI_COMM_WORLD, &status);
+    MPI_Recv(&fw_len, 1, MPI_LONG, rank+1, 0, comm, &status);
     if(fw_len){
-        MPI_Recv(fw_recv, fw_len+1, MPI_CHAR, rank+1, 0, MPI_COMM_WORLD, &status);
+        MPI_Recv(fw_recv, fw_len+1, MPI_CHAR, rank+1, 0, comm, &status);
         if(last_word){
             char* missing_word = malloc(sizeof(*missing_word)*(lw_len+fw_len+1));
             memcpy(missing_word, last_word, lw_len);
@@ -175,29 +175,29 @@ void sync_with_prev(char* last_word, int rank, struct dictionary* dic){
 
             response = 0;
             // Signaling next one
-            MPI_Send(&response, 1, MPI_INT, rank+1, 0, MPI_COMM_WORLD);
+            MPI_Send(&response, 1, MPI_INT, rank+1, 0, comm);
 
             free(missing_word);
         }
         else {
-            MPI_Send(&response, 1, MPI_INT, rank+1, 0, MPI_COMM_WORLD);
+            MPI_Send(&response, 1, MPI_INT, rank+1, 0, comm);
         }
     }
     else {
-        MPI_Send(&response, 1, MPI_INT, rank+1, 0, MPI_COMM_WORLD);
+        MPI_Send(&response, 1, MPI_INT, rank+1, 0, comm);
     }
 }
 
-void sync_with_next(char* fw_word, int rank, struct dictionary* dic){
+void sync_with_prev(char* fw_word, int rank, struct dictionary* dic, MPI_Comm comm){
     MPI_Status status;
     long fw_len = fw_word ? strlen(fw_word): 0;
     int response = 1;
 
-    MPI_Send(&fw_len, 1, MPI_LONG, rank-1, 0, MPI_COMM_WORLD); // Send to the previous in line your first word.
+    MPI_Send(&fw_len, 1, MPI_LONG, rank-1, 0, comm); // Send to the previous in line your first word.
     if(fw_len)
-        MPI_Send(fw_word, fw_len+1, MPI_CHAR, rank-1, 0, MPI_COMM_WORLD);
+        MPI_Send(fw_word, fw_len+1, MPI_CHAR, rank-1, 0, comm);
 
-    MPI_Recv(&response, 1, MPI_INT, rank-1, 0, MPI_COMM_WORLD, &status);
+    MPI_Recv(&response, 1, MPI_INT, rank-1, 0, comm, &status);
 
     if(!response){
         dic_find(dic, fw_word, fw_len);
