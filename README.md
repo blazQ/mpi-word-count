@@ -206,8 +206,16 @@ diff -s output1s output2s
 diff -s output2s output3s
 diff -s output1s output3s
 ```
-Clearly the use of sort and diff is reminiscent towards Linux or other UNIX operating systems, but you can swap it for the equivalent command on your OS.
 
+Inclued with the source code is a bash script that you can execute, to test the correctness of the algorithm up to N processors.
+
+You can use it like this:
+```
+./correctness_test.sh <number_of_processors>
+```
+
+It basically automates what I said before, executing the algorithm number_of_processors times, increasing the number of processors each time.
+The outputs are saved to sorted files that get diff'd at the end and then removed to avoid cluttering.
 # credits 
 Book files dataset courtesy of [TEXT FILES](http://textfiles.com).
 
