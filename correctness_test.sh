@@ -19,6 +19,8 @@ for ((i=1; i<="$no_of_processors"; i++)); do
     echo "=========================================="
     echo -e "Executing with $i processors...\n"
     mpirun \
+        --allow-run-as-root \
+        --mca btl_vader_single_copy_mechanism none \
         -np $i "./word_count.out" \
         -d "./data/books" > "output$i.csv" 2> "logfile$i"
     echo -e "Output saved to output$i.csv\n"
