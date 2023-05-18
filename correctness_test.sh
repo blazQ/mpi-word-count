@@ -53,7 +53,7 @@ for ((i=1; i<=no_of_processors; i++)); do
     rm -f logfile$i
 done
 
-cp sorted_1.csv result.csv
+cp sorted_1.csv results.csv
 rm -f sorted*
 rm -f output*
 

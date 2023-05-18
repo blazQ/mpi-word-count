@@ -1,7 +1,7 @@
 #ifndef FILE_UTILS_H
 #define FILE_UTILS_H
 
-#define MAX_FILES 256
+#define MAX_FILES 512
 
 /**************************************
  * List implementation
