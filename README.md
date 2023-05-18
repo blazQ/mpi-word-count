@@ -248,7 +248,7 @@ I've used 4 e2-standard-2 machines, for a total of 8 cores, to perform strong sc
 
 ### Strong Scalability
 
-<img src="data/imgs/strong_scalability.png" alt="Scalability Results" width=50% height=50% title="Plotted SS Results">
+<img src="data/imgs/strong_scalability.png" alt="Scalability Results" width=100% height=50% title="Plotted SS Results">
 
 As we can see from the plotted values above, derived from an execution on a 30 MB dataset during a strong scalability test, there's a great increase in performance by going parallel, especially when going from 1 processor to 2 processors. The more we increase the number of processors, the more these performance gains become thin.
 
@@ -259,7 +259,7 @@ Basically, when the size of the files to count isn't that great, we see that we 
 
 The situation changes the more files we add:
 
-<img src="data/imgs/strong_scalability_sizes.png" alt="Scalability Results" width=50% height=50% title="Plotted SS Results">
+<img src="data/imgs/strong_scalability_sizes.png" alt="Scalability Results" width=100% height=50% title="Plotted SS Results">
 
 As we can see, varying the size of the input, we get stronger gains, relatively to the size and to the same execution on a smaller size.
 
