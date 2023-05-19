@@ -44,6 +44,8 @@ for ((i=1; i<="$no_of_processors"; i++)); do
     for ((j=1; j<="$no_of_iterations"; j++)); do 
         echo "Executing run number $j with $i processor(s)..."
         mpirun \
+            --allow-run-as-root \
+            --oversubscribe \
             -np $i "./word_count.out" \
             -d "./data/books$i" > "output$i.csv" 2> "logfile$i-$j" # Basically the same as strong, but we use directories with adequate sizes
         last_line=$(tail -1 "logfile$i-$j")
