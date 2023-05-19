@@ -29,6 +29,7 @@ There are certainly other important aspects of the general solution: the use of 
 ### main executable
 
 The main executable has a very simple structure, omitting the details regarding args parsing and MPI Initialization.
+I'll give you a bird-eye look at what the main does, and then go into details in the following sections.
 
 The first thing we do is commiting an MPI_Datatype, histogram_element_dt, which is used in order to transfer the local results to the master at the end of the program.
 
@@ -42,6 +43,8 @@ Then, we proceed to analyze the files in the directory passed as argument, creat
 This list of files is used in order to generate the workload, which is done independently by each processor, in order to avoid wasting time waiting for the master to finish. This can be done assuming that the generated list of files maintains the same order, which is true if all processors run on the same OS.
 
 To generalize this behaviour, we can simply sort the file list before generating the workload.
+
+Details on workload generation can be found in the following section.
 
 After generating the workload, each process accesses its list of chunks and proceed to count their words, saving for each special chunk their respective first and last word.
 Results of the counting are stored in an hashtable called dict.
@@ -63,14 +66,14 @@ for(int i = 0; i < 2; i++){
 }
 ```
 
-This is done after each processor counts words in his chunk list, to avoid having each process waiting the previous one before computing, effectively neutralizing the gains of parallelization.
+This is done after each processor counts words in his chunk list, to avoid having each process wait the previous one before computing, effectively neutralizing the gains of parallelization.
 More details on why there can only be 2 special chunks for chunk list in the following sections.
 
 After this, the MASTER needs to know how many words each process has found in order to allocate the correct amount of space for each local histogram. I did this using a simple Gather.
 
 Then, the MASTER proceeds to allocate space for each local histogram, while every other process sends his local histogram to the MASTER.
 
-The MASTER merges his histogram with the ones that he received, and then writes the output to the file descriptor provided at the beginning.
+The MASTER merges his histogram with the ones that he received, and then writes the output to the file descriptor provided at the beginning, and the program is over.
 
 ### workload.h
 
@@ -89,7 +92,6 @@ A chunk is simply a part of a file that gets processed by one of the processors 
 The special_position field is used to denote if a certain chunk is the first of its file, the last, if it contains the whole file or if it's an intermediary one.
 
 This is used to optimize computation, since clearly there's no need to synchronize anything with anyone if the current chunk contains the whole file (noone else is involved in the computation).
-More on this on the next section.
 
 When the workload is generated, I've used a greedy approach that reminds us of the knapsack problem.
 
@@ -111,8 +113,9 @@ while(file_remaining){
                 file_remaining -= remaining_capacities[cur_proc];
                 start = start + remaining_capacities[cur_proc];
                 remaining_capacities[cur_proc] = 0;
-                cur_proc++;
             }
+            if(remaining_capacities[cur_proc] == 0)
+                curr_proc++;
 }
 //Omitting type assignment for clarity, for more details look directly into the src code
 ```
@@ -120,7 +123,7 @@ while(file_remaining){
 This generation will generate at most 2 special chunks for every chunk list. The reason why this happens is, if a chunk is marked as "REGULAR" it means that it isn't the first of its file, it isn't the last and the current processor can't handle what remained of the file after the previous one added a "FIRST". This means, it's the only one the current process actually handles.
 If a chunk is marked as "FIRST", it means that the remaining capacity of the current process isn't enough to process the whole file, but it could have processed some files before the current one. So the chunk marked as "FIRST" is always the last one of its batch.
 
-Logic for chunks marked as "LAST" is the same, but reversed. "LAST" is always the first one of its batch.
+Logic for chunks marked as "LAST" is the same, but reversed. "LAST" is always the first one of its batch, where with "batch" I'm referring to the chunk list of a single processor.
 A LAST can be potentially followed by a FIRST, and a FIRST can be preceded by a LAST. A REGULAR is always alone. Hence, the number of special chunks is at most 2.
 
 ### chnkcnt.h
@@ -147,6 +150,7 @@ typedef struct{
     char word[WORD_MAX];
 } histogram_element;
 ```
+Where WORD_MAX is 256, assuming no english word is longer than this.
 
 histogram.h also contains the function that actually creates the histogram_element_dt MPI datatype, which is done by simply analyzing the structure and calling the appropriate MPI functions.
 
@@ -195,7 +199,7 @@ mpirun -np 3 ./word_count -d ./data/books >output.csv
 Passing "." as the input directory makes it scan the cwd. Executing word_count without any arguments simply makes it reading from the cwd and outputting to stdout.
 
 ATTENTION:
-Running it inside a container might require using the following launch options:
+Running it inside a docker container might require using the following launch options:
 
 ```bash
 mpirun --allow-run-as-root --mca btl_vader_single_copy_mechanism none -np X ./word_count.out -d ./data/books > output_file.csv
@@ -211,8 +215,7 @@ Basically, this means that a word begins with an alphanumeric character and ends
 Examples of words following this definition could be "house", "cat", "xiii", "154", "pag2" and so on.
 Since this definition doesn't include characters like "-" for obvious reasons, words like "volupt-uousness" are supposed to be split into "volupt" and "uousness" and so on.
 
-To easily test the correctness of the algorithm, you can simply compare it with the results of other utilities (like notepad++ or sublime text) that grant you the ability to search for whole words (not only substrings).
-Since doing this by hand could require a lot of time, you can simply execute the program with 1 processor and then compare the output with the execution with n processors, like this:
+To easily test the correctness of the algorithm, you can simply execute the program with 1 processor and then compare the output with the execution with n processors, like this:
 
 ```bash
 mpirun --allow-run-as-root --mca btl_vader_single_copy_mechanism none -np 1 ./word_count.out -d -f ./data/books output1.csv
@@ -228,9 +231,7 @@ diff -s output2s output3s
 diff -s output1s output3s
 ```
 
-Since this operation is tedious, I've inclued with the source code a simple bash script that you can execute, to test the correctness of the algorithm up to N processors.
-
-You can use it like this:
+Since this operation is tedious, I've inclued with the source code a simple bash script that you can execute like this:
 
 ```bash
 ./correctness_test.sh <max_number_of_processors>
