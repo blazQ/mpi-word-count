@@ -95,6 +95,8 @@ void get_workload(Chunk_vector** chunks_proc, int wsize, File_vector** file_list
                 // Crea chunk completo e aggiungilo alla lista di cur_proc da start a file remaining
                 remaining_capacities[cur_proc] -= file_remaining;
                 file_remaining = 0;
+                if(remaining_capacities[cur_proc] == 0)
+                    cur_proc++;
             }
             else if(remaining_capacities[cur_proc] > 0){
                 int type;

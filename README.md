@@ -64,7 +64,6 @@ for(int i = 0; i < 2; i++){
 ```
 
 This is done after each processor counts words in his chunk list, to avoid having each process waiting the previous one before computing, effectively neutralizing the gains of parallelization.
-
 More details on why there can only be 2 special chunks for chunk list in the following sections.
 
 After this, the MASTER needs to know how many words each process has found in order to allocate the correct amount of space for each local histogram. I did this using a simple Gather.
@@ -245,34 +244,59 @@ The outputs are saved to sorted files that get diff'd at the end and then remove
 The utility has been tested using a cluster of machines, via Google Cloud.
 
 I've used 4 e2-standard-2 machines, for a total of 8 cores, to perform strong scalability tests with a fixed number of bytes as an input and varying the number of processors.
+Tests were done using a fair workload, automatically generated using the scripts found in the directory, to ensure reliable results.
 
 ### Strong Scalability
 
-<img src="data/imgs/strong_scalability.png" alt="Scalability Results" width=100% height=50% title="Plotted SS Results">
+During the test, I've used the scripts supplied with the repository to basically automatically test the program with increasing input sizes, evenly distributed, up to 1 GB. I've also conducted some tests using the full dataset of sparsely distributed files, that you can find in ./data/books, with varying filesizes, to see how the program handled uneven workloads. You can see full results in ./data/imgs.
+In the credits I've also inclued a source, where you can find other files, for personal testing.
 
-As we can see from the plotted values above, derived from an execution on a 30 MB dataset during a strong scalability test, there's a great increase in performance by going parallel, especially when going from 1 processor to 2 processors. The more we increase the number of processors, the more these performance gains become thin.
+Here's a table representing the results of the algorithm, when the input size is roughly 1 GB.
 
-This has probably got to do with the fact that there are a lot of intensive tasks that are currently done sequentially, rather than concurrently.
-Those are the merging of the histograms, the management of the final hashtable, and writing the final output on a file. These tasks can seem trivial on the surface, but they constitute a bottleneck that becomes increasingly prominent.
+| PROCESSORS | TIME(s)   | Speedup |
+|------------|-----------|---------|
+| 1          | 10,119054 | 1       |
+| 2          | 5,2377792 | 1,932   |
+| 3          | 3,6411202 | 2,779   |
+| 4          | 2,6933014 | 3,757   |
+| 5          | 2,1974652 | 4,605   |
+| 6          | 1,8708760 | 5,409   |
+| 7          | 1,6055676 | 6,302   |
+| 8          | 1,4172594 | 7,140   |
 
-Basically, when the size of the files to count isn't that great, we see that we start to get diminishing returns by increasing the number of processors too much.
+Strong scalability testing results show very good performance by the algorithm. It successfully manages to handle even very big workloads, in the order of GBs, with ease and with adequate scaling, although the presence of a large sequential portion, mainly the final merging, done only by process 0, does limit the gains we get from increasing the number of processors after a while.
 
-The situation changes the more files we add:
+I've also conducted the tests with inferior input sizes, and the algorithm tends to behave better the more the size increases. The reason for this behaviour is that the communication overhead becomes more negligible the more the input size increases. Since we only need to check for at most p split words, where p is the number of processors, when we compare p with filesizes in the order of gigabytes, it obviously becomes negligible. That's the reason why apparently the speedup is so high. But as soon as we drop to more "realistic" filesizes, such as 20-80 mb, the speedup for 2 processors hovers around 1.6, which is to be expected, since the comunication overhead and the sequential part become more prominent in the overall computation.
 
-<img src="data/imgs/strong_scalability_sizes.png" alt="Scalability Results" width=100% height=50% title="Plotted SS Results">
+Here's some data to further motivate my conclusions, input sizes ranging from 50 mb to 1000 mb:
+
+![Strong Scaling](data/imgs/strong_scaling_dark.png#gh-dark-mode-only)
+![Strong Scaling](data/imgs/strong_scaling_light.png#gh-light-mode-only)
 
 As we can see, varying the size of the input, we get stronger gains, relatively to the size and to the same execution on a smaller size.
 
-I've used a 70, 50, 30 and 15 MB dataset of textfiles. With the repository I've included a handful of these files, so you can personally test a bit, but I haven't included the full dataset since to reach these numbers I've had to create a dataset of more than 1200 files. In the credits there's a source from where you can download more files for personal testing.
-
-We can conclude that the algorithm is then a bit more efficient the more we increase the input, but it still tends to bottleneck after a certain point, due to the presence of a large sequential portion.
-
-Possible performance improvements could be obtained by avoiding to overload the processor 0 when merging the files, but trying, for example, to make each processor merge with its neighbour, eventually meeting in the middle.
-This would surely decrease the sequential part of the program, which would then be reduced to only the final merging and the printing of the output, but would also be a very delicate operation, that would increase code complexity.
 
 ### Weak Scalability
 
-Still undergoing ...
+To perform weak scalability testing I've created a script that automatically generates a workload of datasets with equally distributed filesizes to serve as input for each run. This basically makes it so 1 processor gets 100 mb as input, 2 processors get 200 mb and so on.
+The results of the weak scalability testing are summarised in the following table:
+
+| PROCESSORS | INPUT SIZE (mb) |  TIME(s)  | Efficiency  |
+|------------|-----------------|-----------|-------------|
+| 1          | 100             | 1,0294909 | 100,0000000 |
+| 2          | 200             | 1,0707393 | 96,1476711  |
+| 3          | 300             | 1,0867302 | 94,7328877  |
+| 4          | 400             | 1,0892999 | 94,5094092  |
+| 5          | 500             | 1,0985009 | 93,7178021  |
+| 6          | 600             | 1,1132747 | 92,4741126  |
+| 7          | 700             | 1,1176962 | 92,1082938  |
+| 8          | 800             | 1,1435514 | 90,0257653  |
+
+As we can see, with medium filesizes the efficiency tends to stay above 90%, although it steadily drops when we increase the number of processors, due to communication overhead.
+Here's a chart to better visualize this result:
+
+![Weak Scaling](data/imgs/weak_scaling_light.png#gh-light-mode-only)
+![Weak Scaling](data/imgs/weak_scaling_dark.png#gh-dark-mode-only)
 
 ## credits
 
