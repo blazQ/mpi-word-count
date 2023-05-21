@@ -150,6 +150,7 @@ typedef struct{
     char word[WORD_MAX];
 } histogram_element;
 ```
+
 Where WORD_MAX is 256, assuming no english word is longer than this.
 
 histogram.h also contains the function that actually creates the histogram_element_dt MPI datatype, which is done by simply analyzing the structure and calling the appropriate MPI functions.
@@ -244,8 +245,9 @@ The outputs are saved to sorted files that get diff'd at the end and then remove
 
 The utility has been tested using a cluster of machines, via Google Cloud.
 
-I've used 4 e2-standard-2 machines, for a total of 8 cores, to perform strong scalability tests with a fixed number of bytes as an input and varying the number of processors.
+I've used 4 e2-standard-4 machines, for a total of 16 cores, to perform strong scalability tests with a fixed number of bytes as an input and varying the number of processors.
 Tests were done using a fair workload, automatically generated using the scripts found in the directory, to ensure reliable results.
+The scripts supplied in the repo are meant for easy local testing. To adapt them in a clustered environment, make sure that every node has the same test directory. (For example, create it in the master and the send it to all the other nodes)
 
 ### Strong Scalability
 
@@ -254,16 +256,24 @@ In the credits I've also inclued a source, where you can find other files, for p
 
 Here's a table representing the results of the algorithm, when the input size is roughly 1 GB.
 
-| PROCESSORS | TIME(s)   | Speedup |
-|------------|-----------|---------|
-| 1          | 10,119054 | 1       |
-| 2          | 5,2377792 | 1,932   |
-| 3          | 3,6411202 | 2,779   |
-| 4          | 2,6933014 | 3,757   |
-| 5          | 2,1974652 | 4,605   |
-| 6          | 1,8708760 | 5,409   |
-| 7          | 1,6055676 | 6,302   |
-| 8          | 1,4172594 | 7,140   |
+| PROCESSORS |  TIME     | SPEEDUP  |
+|------------|-----------|----------|
+| 1          | 18.430213 | 1.000000 |
+| 2          | 9.524229  | 1.935087 |
+| 3          | 6.382149  | 2.887775 |
+| 4          | 4.908484  | 3.754767 |
+| 5          | 3.938193  | 4.679865 |
+| 6          | 3.415837  | 5.395518 |
+| 7          | 3.054598  | 6.033597 |
+| 8          | 2.851356  | 6.463666 |
+| 9          | 2.735256  | 6.738022 |
+| 10         | 2.684146  | 6.866323 |
+| 11         | 2.480436  | 7.430230 |
+| 12         | 2.395400  | 7.694001 |
+| 13         | 2.242199  | 8.219706 |
+| 14         | 2.093394  | 8.803988 |
+| 15         | 2.013839  | 9.151782 |
+| 16         | 1.907726  | 9.660830 |
 
 Strong scalability testing results show very good performance by the algorithm. It successfully manages to handle even very big workloads, in the order of GBs, with ease and with adequate scaling, although the presence of a large sequential portion, mainly the final merging, done only by process 0, does limit the gains we get from increasing the number of processors after a while.
 
@@ -271,11 +281,10 @@ I've also conducted the tests with inferior input sizes, and the algorithm tends
 
 Here's some data to further motivate my conclusions, input sizes ranging from 50 mb to 1000 mb:
 
-![Strong Scaling](data/imgs/strong_scaling_dark.png#gh-dark-mode-only)
-![Strong Scaling](data/imgs/strong_scaling_light.png#gh-light-mode-only)
+![Strong Scaling](data/imgs/strong_scaling_dark_16.png#gh-dark-mode-only)
+![Strong Scaling](data/imgs/strong_scaling_light_16.png#gh-light-mode-only)
 
 As we can see, varying the size of the input, we get stronger gains, relatively to the size and to the same execution on a smaller size.
-
 
 ### Weak Scalability
 
@@ -293,11 +302,15 @@ The results of the weak scalability testing are summarised in the following tabl
 | 7          | 700             | 1,1176962 | 92,1082938  |
 | 8          | 800             | 1,1435514 | 90,0257653  |
 
-As we can see, with medium filesizes the efficiency tends to stay above 90%, although it steadily drops when we increase the number of processors, due to communication overhead.
+As we can see, with medium filesizes the efficiency tends to stay above 90%, although it steadily drops when we increase the number of processors, due to communication overhead, and presumably drops below when further increasing the number of processors.
 Here's a chart to better visualize this result:
 
 ![Weak Scaling](data/imgs/weak_scaling_light.png#gh-light-mode-only)
 ![Weak Scaling](data/imgs/weak_scaling_dark.png#gh-dark-mode-only)
+
+We can then assert that the algorithm is a bit less weakly scalable than it is strongly scalable, and it has probably got to do with the communication overhead over the network, the increasing size of the data structure used to memorize words, and the overhead necessary to copy it and send it to the master, who has to do the merging work with an increasing number of buffers to work with, as the processors' number scales up.
+
+Further charts, regarding weak and strong scalability, can be found at ./data/imgs.
 
 ## credits
 
