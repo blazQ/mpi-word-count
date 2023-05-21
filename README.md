@@ -350,10 +350,10 @@ The results of the weak scalability testing are summarised in the following tabl
 As we can see, with medium filesizes the efficiency tends to stay above 90%, although it steadily drops when we increase the number of processors, due to communication overhead, and presumably drops below when further increasing the number of processors.
 Here's a chart to better visualize this result:
 
-![Weak Scaling](data/imgs/weak_scaling_light.png#gh-light-mode-only)
-![Weak Scaling](data/imgs/weak_scaling_dark.png#gh-dark-mode-only)
+![Efficiency](data/imgs/efficiency_light.png#gh-light-mode-only)
+![Efficiency](data/imgs/efficiency_dark.png#gh-dark-mode-only)
 
-We can then assert that the algorithm is a bit less weakly scalable than it is strongly scalable, and it has probably got to do with the communication overhead over the network, the increasing size of the data structure used to memorize words, and the overhead necessary to copy it and send it to the master, who has to do the merging work with an increasing number of buffers to work with, as the processors' number scales up.
+We can then assert that the algorithm is a bit less weakly scalable than it is strongly scalable, and it has probably got to do with the communication overhead over the network, the increasing size of the data structure used to memorize words, and the overhead necessary to copy it and send it to the master, who has to do the merging work with an increasing number of buffers to work with, as the processors' number scales up, but still manages pretty good results.
 
 Further charts, regarding weak and strong scalability, can be found at ./data/imgs.
 
