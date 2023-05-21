@@ -2,6 +2,20 @@
 
 Word counting utility written in C that makes use of the OpenMPI implementation of the Message Passing Interface standard. Developed for the Parallel and Concurrent Programming on Cloud course at UNISA.
 
+- [mpi-word-count](#mpi-word-count)
+  - [approach used](#approach-used)
+  - [code structure](#code-structure)
+    - [wordcount.c](#wordcountc)
+    - [workload.h](#workloadh)
+    - [chnkcnt.h](#chnkcnth)
+    - [histogram.h futils.h and hashdict.h](#histogramh-futilsh-and-hashdicth)
+  - [usage](#usage)
+  - [correctness](#correctness)
+  - [Performance](#performance)
+    - [Strong Scalability](#strong-scalability)
+    - [Weak Scalability](#weak-scalability)
+  - [credits](#credits)
+
 ## approach used
 
 I won't go into details about what Word Counting is, since it is a well known problem, or about MPI itself, but I'll generally only talk about my implementation.
@@ -26,7 +40,7 @@ There are certainly other important aspects of the general solution: the use of 
 
 ## code structure
 
-### main executable
+### wordcount.c
 
 The main executable has a very simple structure, omitting the details regarding args parsing and MPI Initialization.
 I'll give you a bird-eye look at what the main does, and then go into details in the following sections.
@@ -73,7 +87,38 @@ After this, the MASTER needs to know how many words each process has found in or
 
 Then, the MASTER proceeds to allocate space for each local histogram, while every other process sends his local histogram to the MASTER.
 
-The MASTER merges his histogram with the ones that he received, and then writes the output to the file descriptor provided at the beginning, and the program is over.
+```c
+  // Allocating space for wsize histogram_element[]
+  histogram_element **process_histograms = malloc(sizeof(*process_histograms)*wsize);
+  for(int i = 1; i < wsize; i++)
+   process_histograms[i] = malloc(sizeof(histogram_element) * localszs[i]);
+
+  // Receiving local histograms
+  MPI_Status status;
+  for(int i = 1; i < wsize; i++){
+   MPI_Recv(process_histograms[i], localszs[i], histogram_element_dt, i, 0, MPI_COMM_WORLD, &status);
+  }
+```
+
+Please note that every malloc in the project follows a very basic C idiom, to avoid having to redeclare the whole line if, in future updates, certain types change. For example, if I were to write:
+
+```c
+int list_size = 56 // A certain number
+int* int_pointer = malloc(sizeof(int)*list_size);
+```
+
+And in the future I plan to swap int for uint32, 16 or 8 for specific implementation optimization, I have to rewrite the whole line, changing int* and sizeof(int).
+Instead:
+
+```c
+int list_size = 56 // A certain number
+int* int_pointer = malloc(sizeof(*int_pointer)*list_size); // Size of the content the pointer is referencing, in this case it defaults to sizeof(int) like above.
+```
+
+With the idiom, I only have to change the variable's type, but not the argument of the sizeof operator.
+This can seem something minor, but in a larger project with tons and tons of variable it also makes it more safe to edit, in my opinion.
+
+Finally, MASTER merges his histogram with the ones that he received with the merge_dict() function, and then writes the output to the file descriptor provided at the beginning, and the program is over.
 
 ### workload.h
 
