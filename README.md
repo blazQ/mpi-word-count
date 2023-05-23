@@ -315,6 +315,21 @@ This means that in e2-standard-8 vms, there are actually 4 cores and 2 threads p
 Based on this assumption, my guess, which is also backed up by further evidence, is that as soon as we go from 4 processes to 5, processes start to share a core, thus worsening relative performance in respect to a situation where each process can work on a separate core.
 I've performed similar tests on e2-standard-4 machines, and guess what? On those machines, the threshold after which the strange behaviour happens is no longer 4, but 2...just like the number of actual cores in that case!
 
+Another thing is that, with an e2-standard-8 machine, simply running mpirun -np x with x > 4, without oversubscribing, results in the following error:
+
+```sh
+--------------------------------------------------------------------------
+There are not enough slots available in the system to satisfy the 5 slots
+that were requested by the application:
+  ./word_count.out
+
+Either request fewer slots for your application, or make more slots available
+for use.
+--------------------------------------------------------------------------
+```
+
+Which is what would happen running it locally, on a machine with less than the request amount of cores. This basically means that if we use 8 processors on an e2-standard-8 machine, we are actually oversubscribing from 4, hence the reduced scaling.
+
 Here's a table that summarizes results, in terms of speedup, when we use all 24 vCPUs, on an input of roughly 1 GB:
 
 | PROCESSORS | TIME      | SPEEDUP   |
@@ -398,7 +413,7 @@ As we can see, with medium filesizes the efficiency tends to stay above 90%, alt
 Here's a chart to better visualize this result:
 
 ![Efficiency](data/imgs/efficiency_light_cores.png#gh-light-mode-only)
-![Efficiency](data/imgs/efficiency_dark_cores.png#gh-dark-mode-only)
+i
 
 We can see how the algorithm might be improved, in terms of efficiency, to better efficiently handle workloads without eccessive communication between workers.
 
