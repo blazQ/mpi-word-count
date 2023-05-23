@@ -290,70 +290,125 @@ The outputs are saved to sorted files that get diff'd at the end and then remove
 
 The utility has been tested using a cluster of machines, via Google Cloud.
 
-I've used 4 e2-standard-4 machines, for a total of 16 cores, to perform strong scalability tests with a fixed number of bytes as an input and varying the number of processors.
+I've used 3 e2-standard-8 machines, for a total of 24 vCPUs, to perform strong scalability tests with a fixed number of bytes as an input and varying the number of processors.
 Tests were done using a fair workload, automatically generated using the scripts found in the directory, to ensure reliable results.
 The scripts supplied in the repo are meant for easy local testing. To adapt them in a clustered environment, make sure that every node has the same test directory. (For example, create it in the master and the send it to all the other nodes)
 
 ### Strong Scalability
 
-During the test, I've used the scripts supplied with the repository to basically automatically test the program with increasing input sizes, evenly distributed, up to 1 GB. I've also conducted some tests using the full dataset of sparsely distributed files, that you can find in ./data/books, with varying filesizes, to see how the program handled uneven workloads. You can see full results in ./data/imgs.
+During the test, I've used the scripts supplied with the repository to basically automatically test the program with increasing input sizes, evenly distributed, starting from 50 MB up to 1 GB. I've also conducted some tests using the full dataset of sparsely distributed files, that you can find in ./data/books, with varying filesizes, to see how the program handled uneven workloads. You can see full results in ./data/imgs.
 In the credits I've also inclued a source, where you can find other files, for personal testing.
 
-Here's a table representing the results of the algorithm, when the input size is roughly 1 GB.
+First things first, let's analyze the results for 24 vCPUs, on all filesizes.
+Here's a chart representing just that:
 
-| PROCESSORS |  TIME     | SPEEDUP  |
-|------------|-----------|----------|
-| 1          | 18.430213 | 1.000000 |
-| 2          | 9.524229  | 1.935087 |
-| 3          | 6.382149  | 2.887775 |
-| 4          | 4.908484  | 3.754767 |
-| 5          | 3.938193  | 4.679865 |
-| 6          | 3.415837  | 5.395518 |
-| 7          | 3.054598  | 6.033597 |
-| 8          | 2.851356  | 6.463666 |
-| 9          | 2.735256  | 6.738022 |
-| 10         | 2.684146  | 6.866323 |
-| 11         | 2.480436  | 7.430230 |
-| 12         | 2.395400  | 7.694001 |
-| 13         | 2.242199  | 8.219706 |
-| 14         | 2.093394  | 8.803988 |
-| 15         | 2.013839  | 9.151782 |
-| 16         | 1.907726  | 9.660830 |
+![Strong Scaling_vCPUs](data/imgs/vcpus_strong_scaling_dark.png#gh-dark-mode-only)
+![Strong Scaling_vCPUs](data/imgs/vcpus_strong_scaling_light.pngg#gh-light-mode-only)
 
-Strong scalability testing results show very good performance by the algorithm. It successfully manages to handle even very big workloads, in the order of GBs, with ease and with adequate scaling, although the presence of a large sequential portion, mainly the final merging, done only by process 0, does limit the gains we get from increasing the number of processors after a while.
+There's something strange happening to the algorithm, as soon as we go from 4 processes to 5.
+It briefly worsen its performance, then starts scaling again but a it's a bit slower than before.
+After quite a bit of testing and fiddling with google cloud VMs, I've discovered that the number of vCPUs isn't the actual core number of the CPU.
 
-I've also conducted the tests with inferior input sizes, and the algorithm tends to behave better the more the size increases. The reason for this behaviour is that the communication overhead becomes more negligible the more the input size increases. Since we only need to check for at most p split words, where p is the number of processors, when we compare p with filesizes in the order of gigabytes, it obviously becomes negligible. That's the reason why apparently the speedup is so high. But as soon as we drop to more "realistic" filesizes, such as 20-80 mb, the speedup for 2 processors hovers around 1.6, which is to be expected, since the comunication overhead and the sequential part become more prominent in the overall computation.
+Basically vCPUs are computed as no. of Cores times no. of Threads per core.
 
-Here's some data to further motivate my conclusions, input sizes ranging from 50 mb to 1000 mb:
+This means that in e2-standard-8 vms, there are actually 4 cores and 2 threads per CPU.
+Based on this assumption, my guess, which is also backed up by further evidence, is that as soon as we go from 4 processes to 5, processes start to share a core, thus worsening relative performance in respect to a situation where each process can work on a separate core.
+I've performed similar tests on e2-standard-4 machines, and guess what? On those machines, the threshold after which the strange behaviour happens is no longer 4, but 2...just like the number of actual cores in that case!
 
-![Strong Scaling](data/imgs/strong_scaling_dark_16.png#gh-dark-mode-only)
-![Strong Scaling](data/imgs/strong_scaling_light_16.png#gh-light-mode-only)
+Here's a table that summarizes results, in terms of speedup, when we use all 24 vCPUs, on an input of roughly 1 GB:
 
-As we can see, varying the size of the input, we get stronger gains, relatively to the size and to the same execution on a smaller size.
+| PROCESSORS | TIME      | SPEEDUP   |
+|------------|-----------|-----------|
+| 1          | 18.371841 | 1.000000  |
+| 2          | 9.515122  | 1.930805  |
+| 3          | 6.491697  | 2.830052  |
+| 4          | 4.717342  | 3.894533  |
+| 5          | 5.299246  | 3.466879  |
+| 6          | 4.454800  | 4.124055  |
+| 7          | 3.871530  | 4.745370  |
+| 8          | 3.469534  | 5.295190  |
+| 9          | 3.138919  | 5.852920  |
+| 10         | 2.837474  | 6.474717  |
+| 11         | 2.617261  | 7.019491  |
+| 12         | 2.483414  | 7.397818  |
+| 13         | 2.317219  | 7.928401  |
+| 14         | 2.161452  | 8.499768  |
+| 15         | 2.052521  | 8.950866  |
+| 16         | 1.942018  | 9.460183  |
+| 17         | 1.853378  | 9.912625  |
+| 18         | 1.731097  | 10.612831 |
+| 19         | 1.687065  | 10.889827 |
+| 20         | 1.623129  | 11.318784 |
+| 21         | 1.590576  | 11.550436 |
+| 22         | 1.536827  | 11.954401 |
+| 23         | 1.493661  | 12.299873 |
+| 24         | 1.434171  | 12.810077 |
+
+Even with what we previously said, the algorithm doesn't show a bad performance at all. It manages to have pretty decent and steady speedup. But it's clear how our considerations impact its performance. So I wanted to see what would happen If, instead of using all the vCPUs on the machines, I'd only use the actual cores.
+
+This would mean that, with 3 e2-standard-8 machines, the total number of actual cores would be 12.
+(Be aware of the fact that I only stopped at 24 vCPUs because there's a regional limit in how many vCPUs you can have active)
+
+Guess what happens when you only use the actual cores, which is -np 4, in this case, for every machine? It literally flies.
+
+![Strong Scaling](data/imgs/cores_strong_scaling_dark.png#gh-dark-mode-only)
+![Strong Scaling](data/imgs/cores_strong_scaling_light.png#gh-light-mode-only)
+
+As we can see, varying the size of the input, we get stronger gains, relatively to the size and to the same execution on a smaller size, which is something that also happened earlier, but in this case it's scaling a lot better, as we can see from this table:
+
+| PROCESSORS |  TIME      | Speedup    |
+|------------|------------|------------|
+| 1          | 18.2957978 | 1.0000000  |
+| 2          | 9.3722064  | 1.9521335  |
+| 3          | 6.3146182  | 2.8973720  |
+| 4          | 4.7194074  | 3.8767151  |
+| 5          | 3.8144026  | 4.7965041  |
+| 6          | 3.3372394  | 5.4823151  |
+| 7          | 2.8551636  | 6.4079683  |
+| 8          | 2.4114638  | 7.5870091  |
+| 9          | 2.2015970  | 8.3102392  |
+| 10         | 1.9778902  | 9.2501585  |
+| 11         | 1.8789884  | 9.7370467  |
+| 12         | 1.7424422  | 10.5000888 |
+
+This time, the speedup for 12 processors is 10.5, which is much closer to 12, against the 7.4 we obtained previously!
 
 ### Weak Scalability
 
 To perform weak scalability testing I've created a script that automatically generates a workload of datasets with equally distributed filesizes to serve as input for each run. This basically makes it so 1 processor gets 100 mb as input, 2 processors get 200 mb and so on.
+I've also conducted weak scalability testing bearing in mind what I said earlier, so without exceeding the number of actual cores in every machine.
 The results of the weak scalability testing are summarised in the following table:
 
-| PROCESSORS | INPUT SIZE (mb) |  TIME(s)  | Efficiency  |
-|------------|-----------------|-----------|-------------|
-| 1          | 100             | 1,0294909 | 100,0000000 |
-| 2          | 200             | 1,0707393 | 96,1476711  |
-| 3          | 300             | 1,0867302 | 94,7328877  |
-| 4          | 400             | 1,0892999 | 94,5094092  |
-| 5          | 500             | 1,0985009 | 93,7178021  |
-| 6          | 600             | 1,1132747 | 92,4741126  |
-| 7          | 700             | 1,1176962 | 92,1082938  |
-| 8          | 800             | 1,1435514 | 90,0257653  |
+| PROCESSORS |  TIME     | Efficiency  |
+|------------|-----------|-------------|
+| 1          | 1,0294909 | 100,0000000 |
+| 2          | 1,0707393 | 96,1476711  |
+| 3          | 1,0867302 | 94,7328877  |
+| 4          | 1,0892999 | 94,5094092  |
+| 5          | 1,0985009 | 93,7178021  |
+| 6          | 1,1132747 | 92,4741126  |
+| 7          | 1,1176962 | 92,1082938  |
+| 8          | 1,1435514 | 90,0257653  |
+| 9          | 1,1468319 | 89,7682476  |
+| 10         | 1,1502241 | 89,5035063  |
+| 11         | 1,1570636 | 88,9744436  |
+| 12         | 1,1605109 | 88,7101448  |
 
-As we can see, with medium filesizes the efficiency tends to stay above 90%, although it steadily drops when we increase the number of processors, due to communication overhead, and presumably drops below when further increasing the number of processors.
+As we can see, with medium filesizes the efficiency tends to stay above 90%, although it steadily drops when we increase the number of processors, due to communication overhead, keeps steadily dropping the more we increase the number of processes.
 Here's a chart to better visualize this result:
 
-![Efficiency](data/imgs/efficiency_light.png#gh-light-mode-only)
-![Efficiency](data/imgs/efficiency_dark.png#gh-dark-mode-only)
+![Efficiency](data/imgs/efficiency_light_cores.png#gh-light-mode-only)
+![Efficiency](data/imgs/efficiency_dark_cores.png#gh-dark-mode-only)
 
-We can then assert that the algorithm is a bit less weakly scalable than it is strongly scalable, and it has probably got to do with the communication overhead over the network, the increasing size of the data structure used to memorize words, and the overhead necessary to copy it and send it to the master, who has to do the merging work with an increasing number of buffers to work with, as the processors' number scales up, but still manages pretty good results.
+We can see how the algorithm might be improved, in terms of efficiency, to better efficiently handle workloads without eccessive communication between workers.
+
+Right now, the efficiency is tolerable, but depending on the context of the application, there are certainly a lot of things we can fine tune in order to reach optimal efficiency.
+
+For example, we could implement a way to avoid making each process synchronize for the split words, by implementing a way to make each process "peek" forward. This would reduce communication to the bare minimum, and to what is strictly necessary (gathering of the partial results) and possibly increase efficiency as the number of processors increase.
+
+We could also rewrite some data structures, to make better use of the cache, and be more efficient as the size grows inevitably.
+
+Lastly, there is bound to be something not quite optimal with memory handling, since there are strings involved, so with better understanding of the application domain there could surely be ways to optimize memory usage, for example regarding word lengths.
 
 Further charts, regarding weak and strong scalability, can be found at ./data/imgs.
 
