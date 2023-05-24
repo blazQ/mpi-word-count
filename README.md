@@ -248,6 +248,7 @@ mpirun -np 3 --allow-run-as-root --mca btl_vader_single_copy_mechanism none ./wo
 ```
 
 Passing "." as the input directory makes it scan the cwd. Executing word_count without any arguments simply makes it read from the cwd and output to stdout.
+
 ## correctness
 
 The parsing algorithm is based on the definition of alphanumeric character.
@@ -256,7 +257,15 @@ This means that a word begins with an alphanumeric character and ends with an al
 Examples of words following this definition could be "house", "cat", "xiii", "154", "pag2" and so on.
 Since this definition doesn't include characters like "-" for obvious reasons, words like "volupt-uousness" are supposed to be split into "volupt" and "uousness" and so on.
 
-To easily test the correctness of the algorithm, you can simply execute the program with 1 processor and then compare the output with the execution with n processors, like this:
+To easily test the correctness, I've included a simple shell script within the repo that you can use like this:
+
+```bash
+./correctness_test.sh <max_number_of_processors>
+```
+
+The script calls the program n times, with the ./data/books directory as input, saving the output to different files, then it sorts them and diffs them in order to find any differences.
+If there are no problems with the execution, all files should be identical.
+Basically, it does this:
 
 ```bash
 mpirun --allow-run-as-root --mca btl_vader_single_copy_mechanism none -np 1 ./word_count.out -d -f ./data/books output1.csv
@@ -271,15 +280,6 @@ diff -s output1s output2s
 diff -s output2s output3s
 diff -s output1s output3s
 ```
-
-Since this operation is tedious, I've included with the source code a simple bash script that you can execute like this:
-
-```bash
-./correctness_test.sh <max_number_of_processors>
-```
-
-It automates what I said before, executing the algorithm number_of_processors times, increasing the number of processors each time.
-The outputs are saved to sorted files that get diff'd at the end and then removed to avoid cluttering.
 
 ## Performance
 
@@ -303,6 +303,7 @@ Here's a chart representing just that:
 There's something strange happening to the algorithm, as soon as we go from 4 processes to 5.
 It briefly worsens its performance, then starts scaling again but it's a bit slower than before.
 After quite a bit of testing and fiddling with google cloud VMs, I've discovered that the number of vCPUs isn't the actual core number of the CPU.
+While this explains a lot of things, we cannot be sure of the exact behaviour of the environment, but this is my guess, and below you will find further evidence that it may not be that far from the truth.
 
 In reality, vCPUs are computed as no. of Cores times no. of Threads per core.
 
@@ -323,7 +324,7 @@ for use.
 --------------------------------------------------------------------------
 ```
 
-This is what would happen running it locally, on a machine with less than the requested amount of cores. This means that if we use 8 processors on an e2-standard-8 machine, we are actually oversubscribing from 4, hence the reduced scaling.
+This is what would happen running it locally, on a machine with less than the requested amount of cores. This means that if we use 8 processors on an e2-standard-8 machine, we are actually oversubscribing from 4, and this is the root cause of slightly decreased performance at the beginning.
 
 Here's a table that summarizes results, in terms of speedup, when we use all 24 vCPUs, on an input of roughly 1 GB:
 
