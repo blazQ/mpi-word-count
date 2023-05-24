@@ -230,7 +230,7 @@ MPI_Type_create_struct(count, block_length, displacements, types, histogram_elem
 
 Clone the repo, use make and then run with the desired number of processes.
 
-You can specify -d, a directory and then -f and a file, where the results will be saved in CSV format.
+You can specify -d, -f, a directory and then a file, where the results will be saved in CSV format.
 Example of use:
 
 ```bash
@@ -238,26 +238,16 @@ git clone https://github.com/blazQ/mpi-word-count.git
 cd mpi-word-count
 make all
 make clean
-mpirun -np 3 ./word_count.out -d ./data/books -f output.csv
+mpirun -np 3 --allow-run-as-root --mca btl_vader_single_copy_mechanism none ./word_count.out -d -f ./data/books output.csv
 ```
 
-You can also use only -d and then specify a directory. It will print to stdout, so you'll have to redirect it to your desired output file.
+You can also use only -d and then specify a directory. It will print to stdout, so you'll have to redirect it to your desired output file. (it's faster if you want to try it multiple times)
 
 ```bash
-mpirun -np 3 ./word_count -d ./data/books >output.csv
+mpirun -np 3 --allow-run-as-root --mca btl_vader_single_copy_mechanism none ./word_count.out -d ./data/books >output.csv
 ```
 
 Passing "." as the input directory makes it scan the cwd. Executing word_count without any arguments simply makes it read from the cwd and output to stdout.
-
-ATTENTION:
-Running it inside a docker container might require using the following launch options:
-
-```bash
-mpirun --allow-run-as-root --mca btl_vader_single_copy_mechanism none -np X ./word_count.out -d ./data/books > output_file.csv
-```
-
-Running it without these options doesn't constitute a problem, but may generate some random alerts (that do not alter the code's output in any way, but they derive from docker's way of handling PIDs)
-
 ## correctness
 
 The parsing algorithm is based on the definition of alphanumeric character.
