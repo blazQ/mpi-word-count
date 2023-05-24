@@ -18,7 +18,7 @@ Word counting utility written in C that makes use of the OpenMPI implementation 
 
 ## approach used
 
-I won't go into details about what Word Counting is, since it is a well known problem, or about MPI itself, but I'll generally only talk about my implementation.
+I won't go into details about what Word Counting is since it is a well-known problem, or about MPI itself, but I'll generally only talk about my implementation.
 
 The most important aspect of the solution is the workload generation and the criteria behind the splitting of the files between each processor.
 I've considered three general ways of dividing the files between the processors:
@@ -36,7 +36,7 @@ To avoid this, synchronization logic must be inserted in the final solution, in 
 
 This synchronization logic must be implemented in such a way as to avoid unnecessary communication overhead and loss of all the gains of parallelization.
 
-There are certainly other important aspects of the general solution: the use of an hashtable for fast lookup of each word and their respective counts, the use of MPI derived datatypes to optimize comunications and so on. Each of this will be detailed in the following sections.
+There are certainly other important aspects of the general solution: the use of a hashtable for fast lookup of each word and their respective counts, the use of MPI-derived datatypes to optimize communications and so on. Each of these will be detailed in the following sections.
 
 ## code structure
 
@@ -45,23 +45,23 @@ There are certainly other important aspects of the general solution: the use of 
 The main executable has a very simple structure, omitting the details regarding args parsing and MPI Initialization.
 I'll give you a bird-eye look at what the main does, and then go into details in the following sections.
 
-The first thing we do is commiting an MPI_Datatype, histogram_element_dt, which is used in order to transfer the local results to the master at the end of the program.
+The first thing we do is commit an MPI_Datatype, histogram_element_dt, which is used to transfer the local results to the master at the end of the program.
 
 ```c
  MPI_Datatype histogram_element_dt;
  MPI_Type_create_histogram(&histogram_element_dt);
 ```
 
-Then, we proceed to analyze the files in the directory passed as argument, creating a list of file elements.
+Then, we proceed to analyze the files in the directory passed as an argument, creating a list of file elements.
 
-This list of files is used in order to generate the workload, which is done independently by each processor, in order to avoid wasting time waiting for the master to finish. This can be done assuming that the generated list of files maintains the same order, which is true if all processors run on the same OS.
+This list of files is used to generate the workload, which is done independently by each processor, to avoid wasting time waiting for the master to finish. This can be done assuming that the generated list of files maintains the same order, which is true if all processors run on the same OS.
 
 To generalize this behaviour, we can simply sort the file list before generating the workload.
 
 Details on workload generation can be found in the following section.
 
-After generating the workload, each process accesses its list of chunks and proceed to count their words, saving for each special chunk their respective first and last word.
-Results of the counting are stored in an hashtable called dict.
+After generating the workload, each process accesses its list of chunks and proceeds to count their words, saving for each special chunk their respective first and last word.
+The results of the counting are stored in a hashtable called dict.
 
 After counting words in every chunk, we simply need to synchronize the results with our peers, to avoid losing words in between chunks:
 
@@ -81,11 +81,11 @@ for(int i = 0; i < 2; i++){
 ```
 
 This is done after each processor counts words in his chunk list, to avoid having each process wait the previous one before computing, effectively neutralizing the gains of parallelization.
-More details on why there can only be 2 special chunks for chunk list in the following sections.
+More details on why there can only be 2 special chunks for chunk list are in the following sections.
 
-After this, the MASTER needs to know how many words each process has found in order to allocate the correct amount of space for each local histogram. I did this using a simple Gather.
+After this, the MASTER needs to know how many words each process has found to allocate the correct amount of space for each local histogram. I did this using a simple Gather.
 
-Then, the MASTER proceeds to allocate space for each local histogram, while every other process sends his local histogram to the MASTER.
+Then, the MASTER proceeds to allocate space for each local histogram, while every other process sends its local histogram to the MASTER.
 
 ```c
   // Allocating space for wsize histogram_element[]
@@ -107,22 +107,22 @@ int list_size = 56 // A certain number
 int* int_pointer = malloc(sizeof(int)*list_size);
 ```
 
-And in the future I plan to swap int for uint32, 16 or 8 for specific implementation optimization, I have to rewrite the whole line, changing int* and sizeof(int).
+And if in the future, I plan to swap int for uint32, 16 or 8 for specific implementation optimization, I have to rewrite the whole line, changing int* and sizeof(int).
 Instead:
 
 ```c
 int list_size = 56 // A certain number
-int* int_pointer = malloc(sizeof(*int_pointer)*list_size); // Size of the content the pointer is referencing, in this case it defaults to sizeof(int) like above.
+int* int_pointer = malloc(sizeof(*int_pointer)*list_size); // Size of the content the pointer is referencing, in this case, it defaults to sizeof(int) like above.
 ```
 
 With the idiom, I only have to change the variable's type, but not the argument of the sizeof operator.
-This can seem something minor, but in a larger project with tons and tons of variable it also makes it more safe to edit, in my opinion.
+This can seem something minor, but in a larger project with tons and tons of variables, it also makes it safer to edit, in my opinion.
 
-Finally, MASTER merges his histogram with the ones that he received with the merge_dict() function, and then writes the output to the file descriptor provided at the beginning, and the program is over.
+Finally, MASTER merges his histogram with the ones he received with the merge_dict() function and then writes the output to the file descriptor provided at the beginning, and the program is over.
 
 ### workload.h
 
-This header and it's relative source file defines what a chunk is and how the workload is generated between each processor.
+This header and its relative source file define what a chunk is and how the workload is generated between each processor.
 
 ```c
 typedef struct chunk{
@@ -136,7 +136,7 @@ typedef struct chunk{
 A chunk is simply a part of a file that gets processed by one of the processors involved in the computation. It has a start field that defines from where the counting starts, in bytes, and an end field that does exactly what you think it does.
 The special_position field is used to denote if a certain chunk is the first of its file, the last, if it contains the whole file or if it's an intermediary one.
 
-This is used to optimize computation, since clearly there's no need to synchronize anything with anyone if the current chunk contains the whole file (noone else is involved in the computation).
+This is used to optimize computation, since clearly there's no need to synchronize anything with anyone if the current chunk contains the whole file (no one else is involved in the computation).
 
 When the workload is generated, I've used a greedy approach that reminds us of the knapsack problem.
 
@@ -144,7 +144,7 @@ We've got a certain total number of bytes to assign, and using this value and th
 
 Then we iterate over the files, and we try to fill each "bin" until it's full with chunks of the current file. If the remaining capacity of the current process is enough to process a whole file, we create a chunk with special_position = UNIQUE, else it will be either FIRST, LAST or REGULAR, which means that either the chunk starts from 0 and ends before the file ends, or that it doesn't start from 0 but ends at EOF, or that it's neither at the beginning or the end of a file.
 
-In this case obviously the "bin" is a list of chunks to be assigned to each process.
+In this case, the "bin" is a list of chunks to be assigned to each process.
 
 ```c
 while(file_remaining){
@@ -162,24 +162,29 @@ while(file_remaining){
             if(remaining_capacities[cur_proc] == 0)
                 curr_proc++;
 }
-//Omitting type assignment for clarity, for more details look directly into the src code
+//Omitting type assignment for clarity, for more details, look directly into the src code
 ```
 
-This generation will generate at most 2 special chunks for every chunk list. The reason why this happens is, if a chunk is marked as "REGULAR" it means that it isn't the first of its file, it isn't the last and the current processor can't handle what remained of the file after the previous one added a "FIRST". This means, it's the only one the current process actually handles.
-If a chunk is marked as "FIRST", it means that the remaining capacity of the current process isn't enough to process the whole file, but it could have processed some files before the current one. So the chunk marked as "FIRST" is always the last one of its batch.
+This process will generate at most 2 special chunks for every chunk list. 
+We can be sure of this statement because the workload generation works by greedily scanning the list of files, which we assume is the same for every process.
 
-Logic for chunks marked as "LAST" is the same, but reversed. "LAST" is always the first one of its batch, where with "batch" I'm referring to the chunk list of a single processor.
-A LAST can be potentially followed by a FIRST, and a FIRST can be preceded by a LAST. A REGULAR is always alone. Hence, the number of special chunks is at most 2.
+This means that if a chunk is marked as FIRST, it MUST be the last element of a certain chunk list, because it means that the current process isn't able to make a whole chunk of the current file, thus it must create a chunk of said file that uses all of its remaining capacity.
+
+Conversely, if a chunk is marked as LAST, it MUST be the first element of a certain chunk list, because it means that the file that the chunk refers to was processed before by one or more processes, that couldn't handle the whole size, and the current processor is the one that managed to do it.
+
+Already we can see how there can only be at most one FIRST and one LAST per chunk list.
+
+To complete the reasoning, if a chunk is marked as REGULAR it MUST be the only element in the chunk list. Because having it marked like so means that the previous process wasn't able to handle the whole file, but the current process isn't either. So its whole capacity is used by this so-called "intermediary" chunk.
 
 ### chnkcnt.h
 
-This header defines the functions that get used to count words inside a file.
-I won't go into details about the counting itself since you can image how it works, but this header also contains functions to synchronize results between chunks.
-They are called sync_with_prev and synch_with_next, and as you can image they are used to synchronize with the previous process or the next in line.
+This header defines the functions used to count words inside a file.
+I won't go into details about the counting itself since you can imagine how it works, but this header also contains functions to synchronize results between chunks.
+They are called sync_with_prev and synch_with_next, and as you can imagine they are used to synchronize with the previous process or the next in line.
 
-sync_with_prev gets executed when the current chunk isn't the first of its file, so for example "LAST" or "REGULAR". If the current chunk begins with a word, not a space or other characters not considered to be alphanumeric, the word gets propagated backwards. The previous element will respond according to how its own chunk ends, so we can remove the partial word from the hasbtable.
+sync_with_prev gets executed when the current chunk isn't the first of its file, for example, "LAST" or "REGULAR". If the current chunk begins with a word, not a space or other characters not considered to be alphanumeric, the word gets propagated backwards. The previous element will respond according to how its chunk ends, so we can remove the partial word from the hashtable.
 
-sync_with_next has the same logic in reverse. It gets executed when the chunk is the "FIRST", or "REGULAR". That basically means that we need to check if the chunk ends with a word, and if it does, and we receive confirmation from the next process that its own chunk begins with a word, we can then proceed to merge them and update the hashtable with correct values.
+sync_with_next has the same logic in reverse. It gets executed when the chunk is the "FIRST", or "REGULAR". That basically means that we need to check if the chunk ends with a word, and if it does, and we receive confirmation from the next process that its chunk begins with a word, we can then proceed to merge them and update the hashtable with correct values.
 
 This logic gets executed after the parallel counting of the words, in order to avoid losing too much performance. Alternative methods can obviously be used to improve performance further.
 
@@ -198,7 +203,7 @@ typedef struct{
 
 Where WORD_MAX is 256, assuming no english word is longer than this.
 
-histogram.h also contains the function that actually creates the histogram_element_dt MPI datatype, which is done by simply analyzing the structure and calling the appropriate MPI functions.
+histogram.h also contains the function that creates the histogram_element_dt MPI datatype, which is done by simply analyzing the structure and calling the appropriate MPI functions.
 
 ```c
 int count = 2;
@@ -223,7 +228,7 @@ MPI_Type_create_struct(count, block_length, displacements, types, histogram_elem
 
 ## usage
 
-Simply clone the rep, use make and then run with the desired number of processes.
+Clone the repo, use make and then run with the desired number of processes.
 
 You can specify -d, a directory and then -f and a file, where the results will be saved in CSV format.
 Example of use:
@@ -242,7 +247,7 @@ You can also use only -d and then specify a directory. It will print to stdout, 
 mpirun -np 3 ./word_count -d ./data/books >output.csv
 ```
 
-Passing "." as the input directory makes it scan the cwd. Executing word_count without any arguments simply makes it reading from the cwd and outputting to stdout.
+Passing "." as the input directory makes it scan the cwd. Executing word_count without any arguments simply makes it read from the cwd and output to stdout.
 
 ATTENTION:
 Running it inside a docker container might require using the following launch options:
@@ -251,13 +256,13 @@ Running it inside a docker container might require using the following launch op
 mpirun --allow-run-as-root --mca btl_vader_single_copy_mechanism none -np X ./word_count.out -d ./data/books > output_file.csv
 ```
 
-Running it without these options doesn't constitute a problem, but may generate some random alerts (that do not alter the code's output in any way, but they derive from docker's own way of handling PIDs)
+Running it without these options doesn't constitute a problem, but may generate some random alerts (that do not alter the code's output in any way, but they derive from docker's way of handling PIDs)
 
 ## correctness
 
-The parsing algorithm is based con the definition of alphanumeric character.
+The parsing algorithm is based on the definition of alphanumeric character.
 
-Basically, this means that a word begins with an alphanumeric character and ends with an alphanumeric character.
+This means that a word begins with an alphanumeric character and ends with an alphanumeric character.
 Examples of words following this definition could be "house", "cat", "xiii", "154", "pag2" and so on.
 Since this definition doesn't include characters like "-" for obvious reasons, words like "volupt-uousness" are supposed to be split into "volupt" and "uousness" and so on.
 
@@ -277,27 +282,27 @@ diff -s output2s output3s
 diff -s output1s output3s
 ```
 
-Since this operation is tedious, I've inclued with the source code a simple bash script that you can execute like this:
+Since this operation is tedious, I've included with the source code a simple bash script that you can execute like this:
 
 ```bash
 ./correctness_test.sh <max_number_of_processors>
 ```
 
-It basically automates what I said before, executing the algorithm number_of_processors times, increasing the number of processors each time.
+It automates what I said before, executing the algorithm number_of_processors times, increasing the number of processors each time.
 The outputs are saved to sorted files that get diff'd at the end and then removed to avoid cluttering.
 
 ## Performance
 
 The utility has been tested using a cluster of machines, via Google Cloud.
 
-I've used 3 e2-standard-8 machines, for a total of 24 vCPUs, to perform strong scalability tests with a fixed number of bytes as an input and varying the number of processors.
+I've used 3 e2-standard-8 machines, for a total of 24 vCPUs, to perform strong scalability tests with a fixed number of bytes as input and varying the number of processors.
 Tests were done using a fair workload, automatically generated using the scripts found in the directory, to ensure reliable results.
-The scripts supplied in the repo are meant for easy local testing. To adapt them in a clustered environment, make sure that every node has the same test directory. (For example, create it in the master and the send it to all the other nodes)
+The scripts supplied in the repo are meant for easy local testing. To adapt them in a clustered environment, make sure that every node has the same test directory. (For example, create it in the master and then send it to all the other nodes)
 
 ### Strong Scalability
 
-During the test, I've used the scripts supplied with the repository to basically automatically test the program with increasing input sizes, evenly distributed, starting from 50 MB up to 1 GB. I've also conducted some tests using the full dataset of sparsely distributed files, that you can find in ./data/books, with varying filesizes, to see how the program handled uneven workloads. You can see full results in ./data/imgs.
-In the credits I've also inclued a source, where you can find other files, for personal testing.
+During the test, I used a slightly modified version of the scripts supplied with the repository to test the program with increasing input sizes, evenly distributed, starting from 50 MB up to 1 GB. I've also conducted some tests using the full dataset of sparsely distributed files, that you can find in ./data/books, with varying file sizes, to see how the program handled uneven workloads. You can see full results in ./data/imgs.
+In the credits, I've also included a source, where you can find other files, for personal testing.
 
 First things first, let's analyze the results for 24 vCPUs, on all filesizes.
 Here's a chart representing just that:
@@ -306,13 +311,13 @@ Here's a chart representing just that:
 ![Strong Scaling_vCPUs](data/imgs/vcpus_strong_scaling_light.pngg#gh-light-mode-only)
 
 There's something strange happening to the algorithm, as soon as we go from 4 processes to 5.
-It briefly worsen its performance, then starts scaling again but a it's a bit slower than before.
+It briefly worsens its performance, then starts scaling again but it's a bit slower than before.
 After quite a bit of testing and fiddling with google cloud VMs, I've discovered that the number of vCPUs isn't the actual core number of the CPU.
 
-Basically vCPUs are computed as no. of Cores times no. of Threads per core.
+In reality, vCPUs are computed as no. of Cores times no. of Threads per core.
 
-This means that in e2-standard-8 vms, there are actually 4 cores and 2 threads per CPU.
-Based on this assumption, my guess, which is also backed up by further evidence, is that as soon as we go from 4 processes to 5, processes start to share a core, thus worsening relative performance in respect to a situation where each process can work on a separate core.
+This means that in e2-standard-8 VMs, there are actually 4 cores and 2 threads per CPU.
+Based on this assumption, my guess, which is also backed up by further evidence, is that as soon as we go from 4 processes to 5, processes start to share a core, thus worsening relative performance compared to a situation where each process can work on a separate core.
 I've performed similar tests on e2-standard-4 machines, and guess what? On those machines, the threshold after which the strange behaviour happens is no longer 4, but 2...just like the number of actual cores in that case!
 
 Another thing is that, with an e2-standard-8 machine, simply running mpirun -np x with x > 4, without oversubscribing, results in the following error:
@@ -323,12 +328,12 @@ There are not enough slots available in the system to satisfy the 5 slots
 that were requested by the application:
   ./word_count.out
 
-Either request fewer slots for your application, or make more slots available
+Either request fewer slots for your application or make more slots available
 for use.
 --------------------------------------------------------------------------
 ```
 
-Which is what would happen running it locally, on a machine with less than the request amount of cores. This basically means that if we use 8 processors on an e2-standard-8 machine, we are actually oversubscribing from 4, hence the reduced scaling.
+This is what would happen running it locally, on a machine with less than the requested amount of cores. This means that if we use 8 processors on an e2-standard-8 machine, we are actually oversubscribing from 4, hence the reduced scaling.
 
 Here's a table that summarizes results, in terms of speedup, when we use all 24 vCPUs, on an input of roughly 1 GB:
 
@@ -359,17 +364,17 @@ Here's a table that summarizes results, in terms of speedup, when we use all 24 
 | 23         | 1.493661  | 12.299873 |
 | 24         | 1.434171  | 12.810077 |
 
-Even with what we previously said, the algorithm doesn't show a bad performance at all. It manages to have pretty decent and steady speedup. But it's clear how our considerations impact its performance. So I wanted to see what would happen If, instead of using all the vCPUs on the machines, I'd only use the actual cores.
+Even with what we previously said, the algorithm doesn't show a bad performance at all. It manages to have a pretty decent and steady speedup. But it's clear how our considerations impact its performance. So I wanted to see what would happen If, instead of using all the vCPUs on the machines, I'd only use the actual cores.
 
 This would mean that, with 3 e2-standard-8 machines, the total number of actual cores would be 12.
-(Be aware of the fact that I only stopped at 24 vCPUs because there's a regional limit in how many vCPUs you can have active)
+(Be aware of the fact that I only stopped at 24 vCPUs because there's a regional limit on how many vCPUs you can have active)
 
 Guess what happens when you only use the actual cores, which is -np 4, in this case, for every machine? It literally flies.
 
 ![Strong Scaling](data/imgs/cores_strong_scaling_dark.png#gh-dark-mode-only)
 ![Strong Scaling](data/imgs/cores_strong_scaling_light.png#gh-light-mode-only)
 
-As we can see, varying the size of the input, we get stronger gains, relatively to the size and to the same execution on a smaller size, which is something that also happened earlier, but in this case it's scaling a lot better, as we can see from this table:
+As we can see, by varying the size of the input, we get stronger gains, relative to the size and to the same execution on a smaller size, which is something that also happened earlier, but in this case, it's scaling a lot better, as we can see from this table:
 
 | PROCESSORS |  TIME      | Speedup    |
 |------------|------------|------------|
@@ -390,7 +395,7 @@ This time, the speedup for 12 processors is 10.5, which is much closer to 12, ag
 
 ### Weak Scalability
 
-To perform weak scalability testing I've created a script that automatically generates a workload of datasets with equally distributed filesizes to serve as input for each run. This basically makes it so 1 processor gets 100 mb as input, 2 processors get 200 mb and so on.
+To perform weak scalability testing I've created a script that automatically generates a workload of datasets with equally distributed filesizes to serve as input for each run. This makes it so 1 processor gets 100 mb as input, 2 processors get 200 MB and so on.
 I've also conducted weak scalability testing bearing in mind what I said earlier, so without exceeding the number of actual cores in every machine.
 The results of the weak scalability testing are summarised in the following table:
 
@@ -413,19 +418,20 @@ As we can see, with medium filesizes the efficiency tends to stay above 90%, alt
 Here's a chart to better visualize this result:
 
 ![Efficiency](data/imgs/efficiency_light_cores.png#gh-light-mode-only)
-i
+![Efficiency](data/imgs/efficiency_dark_cores.png#gh-dark-mode-only)
 
-We can see how the algorithm might be improved, in terms of efficiency, to better efficiently handle workloads without eccessive communication between workers.
 
-Right now, the efficiency is tolerable, but depending on the context of the application, there are certainly a lot of things we can fine tune in order to reach optimal efficiency.
+We can see how the algorithm might be improved, in terms of efficiency, to handle workloads without excessive communication between workers.
 
-For example, we could implement a way to avoid making each process synchronize for the split words, by implementing a way to make each process "peek" forward. This would reduce communication to the bare minimum, and to what is strictly necessary (gathering of the partial results) and possibly increase efficiency as the number of processors increase.
+Right now, the efficiency is tolerable, but depending on the context of the application, there are certainly a lot of things we can fine-tune to reach optimal efficiency.
 
-We could also rewrite some data structures, to make better use of the cache, and be more efficient as the size grows inevitably.
+For example, we could implement a way to avoid making each process communicate to recover the split words, by implementing a way to make each process "peek" forward or backwards. Such a solution would reduce communication to what is strictly necessary (gathering of partial results) and possibly increase efficiency as the number of processors increases.
 
-Lastly, there is bound to be something not quite optimal with memory handling, since there are strings involved, so with better understanding of the application domain there could surely be ways to optimize memory usage, for example regarding word lengths.
+We could also rewrite some data structures to make better use of the cache, and be more efficient as the size inevitably grows.
 
-Further charts, regarding weak and strong scalability, can be found at ./data/imgs.
+Lastly, there's bound to be something not quite optimal with memory handling, since there are strings involved, so with a better understanding of the application domain there could be ways to optimize memory usage, for example regarding word lengths.
+
+Additional charts regarding weak and strong scalability can be found at ./data/imgs.
 
 ## credits
 
