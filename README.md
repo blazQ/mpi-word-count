@@ -165,7 +165,7 @@ while(file_remaining){
 //Omitting type assignment for clarity, for more details, look directly into the src code
 ```
 
-This process will generate at most 2 special chunks for every chunk list. 
+This process will generate at most 2 special chunks for every chunk list.
 We can be sure of this statement because the workload generation works by greedily scanning the list of files, which we assume is the same for every process.
 
 This means that if a chunk is marked as FIRST, it MUST be the last element of a certain chunk list, because it means that the current process isn't able to make a whole chunk of the current file, thus it must create a chunk of said file that uses all of its remaining capacity.
@@ -419,7 +419,6 @@ Here's a chart to better visualize this result:
 
 ![Efficiency](data/imgs/efficiency_light_cores.png#gh-light-mode-only)
 ![Efficiency](data/imgs/efficiency_dark_cores.png#gh-dark-mode-only)
-
 
 We can see how the algorithm might be improved, in terms of efficiency, to handle workloads without excessive communication between workers.
 
