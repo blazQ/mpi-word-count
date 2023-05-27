@@ -308,10 +308,10 @@ While this explains a lot of things, we cannot be sure of the exact behaviour of
 In reality, vCPUs are computed as no. of Cores times no. of Threads per core.
 
 This means that in e2-standard-8 VMs, there are actually 4 cores and 2 threads per CPU.
-Based on this assumption, my guess, which is also backed up by further evidence, is that as soon as we go from 4 processes to 5, processes start to share a core, thus worsening relative performance compared to a situation where each process can work on a separate core.
+Based on this assumption, my guess, which is also backed up by further evidence, is that as soon as we go from 4 processes to 5, MPI is basically oversubscribing the 4 cores he can actually see, thus worsening relative performance compared to a situation where each process can work on a separate core.
 I've performed similar tests on e2-standard-4 machines, and guess what? On those machines, the threshold after which the strange behaviour happens is no longer 4, but 2...just like the number of actual cores in that case!
 
-Another thing is that, with an e2-standard-8 machine, simply running mpirun -np x with x > 4, without oversubscribing, results in the following error:
+Another thing is that, with an e2-standard-8 machine, simply running mpirun -np x with x > 4, without explicit oversubscribing, results in the following error:
 
 ```sh
 --------------------------------------------------------------------------
@@ -326,7 +326,9 @@ for use.
 
 This is what would happen running it locally, on a machine with less than the requested amount of cores. This means that if we use 8 processors on an e2-standard-8 machine, we are actually oversubscribing from 4, and this is the root cause of slightly decreased performance at the beginning.
 
-Here's a table that summarizes results, in terms of speedup, when we use all 24 vCPUs, on an input of roughly 1 GB:
+Moreover, running htop on these machines shows only 4 cores available.
+
+Nonetheless, here's a table that summarizes results, in terms of speedup, when we use all 24 vCPUs, bearing in mind what we said, on an input of roughly 1 GB:
 
 | PROCESSORS | TIME      | SPEEDUP   |
 |------------|-----------|-----------|
@@ -383,6 +385,10 @@ As we can see, by varying the size of the input, we get stronger gains, relative
 | 12         | 1.7424422  | 10.5000888 |
 
 This time, the speedup for 12 processors is 10.5, which is much closer to 12, against the 7.4 we obtained previously!
+
+After even more fiddling, I've discovered that you can change the ratio between vCPUS and actual cores to 1/1, and create custom machines that utilize 8 full cores.
+
+But this, sadly, doesn't solve the problem, as Google Cloud still bills you like there's double the amount of vCPUs, and it affects regional limits, thus making it impossible to have 24 actual cores. What I mean is, if I configure a custom machine with 4 cores and 1 vCPU per core, in order to make htop and MPI see all slots available, it still counts in regional limits as 8 vCPUs. And the same reasoning applies If I want to configure a machine with 8 cores. So If I configure, for example, 3 machines with 4 actual cores and 1 vCPU per core, Google Cloud still thinks I've used 24 vCPUs, even if there are actually 12 slots, and we're back to square one.“
 
 ### Weak Scalability
 
