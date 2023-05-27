@@ -386,6 +386,11 @@ As we can see, by varying the size of the input, we get stronger gains, relative
 
 This time, the speedup for 12 processors is 10.5, which is much closer to 12, against the 7.4 we obtained previously!
 
+Here's a chart to better visualize it:
+![Speedup Compare](data/imgs/speedup_compare_dark.png#gh-dark-mode-only)
+![Speedup Compare](data/imgs/speedup_compare_light.png#gh-light-mode-only)
+The dip when we go over the actual number of slots per machine is even more apparent.
+
 After even more fiddling, I've discovered that you can change the ratio between vCPUS and actual cores to 1/1, and create custom machines that utilize 8 full cores.
 
 But this, sadly, doesn't solve the problem, as Google Cloud still bills you like there's double the amount of vCPUs, and it affects regional limits, thus making it impossible to have 24 actual cores. What I mean is, if I configure a custom machine with 4 cores and 1 vCPU per core, in order to make htop and MPI see all slots available, it still counts in regional limits as 8 vCPUs. And the same reasoning applies If I want to configure a machine with 8 cores. So If I configure, for example, 3 machines with 4 actual cores and 1 vCPU per core, Google Cloud still thinks I've used 24 vCPUs, even if there are actually 12 slots, and we're back to square one.“
