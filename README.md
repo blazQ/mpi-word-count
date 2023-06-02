@@ -28,9 +28,9 @@ I've considered three general ways of dividing the files between the processors:
 - Splitting based on file sizes
 
 The first one is not efficient enough when the filesize, which is the actual measure of input complexity, varies greatly between files in the directory, causing an uneven workload distribution, while the second one has problems when the line length is not the same between the files.
-The third one, while being slightly more difficult to implement, ensures a perfectly balanced workload distribution between each process.
+The third one, while being a bit more tricky, is a bit more suited to my interpretation of the problem. I believe the optimal solution should actually be a hybrid approach, because even targeting filesize only, the number of files could still be a source of unbalanced workload if, say, one file is so much bigger than the others.
 
-The problem this approach poses is that a single file could, theoretically, be processed by more than one process. So a word could be split between 2 processes, and thus, the final count would be wrong.
+All things aside, the problem this approach poses is that a single file could, theoretically, be processed by more than one process. So a word could be split between 2 processes, and thus, the final count would be wrong.
 
 To avoid this, synchronization logic must be inserted in the final solution, in order to recover the "missing word".
 
@@ -42,7 +42,7 @@ There are certainly other important aspects of the general solution: the use of 
 
 ### wordcount.c
 
-The main executable has a very simple structure, omitting the details regarding args parsing and MPI Initialization.
+The main file has a very simple structure.
 I'll give you a bird-eye look at what the main does, and then go into details in the following sections.
 
 The first thing we do is commit an MPI_Datatype, histogram_element_dt, which is used to transfer the local results to the master at the end of the program.
@@ -54,9 +54,9 @@ The first thing we do is commit an MPI_Datatype, histogram_element_dt, which is 
 
 Then, we proceed to analyze the files in the directory passed as an argument, creating a list of file elements.
 
-This list of files is used to generate the workload, which is done independently by each processor, to avoid wasting time waiting for the master to finish. This can be done assuming that the generated list of files maintains the same order, which is true if all processors run on the same OS.
+This list of files is used to generate the workload, which is done independently by each processor, to avoid wasting time waiting for the master to finish. This can be done assuming that the generated list of files maintains the same order, which is true if all processors run on the same OS and we already know which files we are analyzing.
 
-To generalize this behaviour, we can simply sort the file list before generating the workload.
+To generalize this behaviour for multi-OS clusters, we can simply sort the file list before generating the workload, and if the number of files isn't the "dominant" metric, it should not be a problem. As always, the specific optimization depends on the use case.
 
 Details on workload generation can be found in the following section.
 
@@ -286,6 +286,8 @@ diff -s output1s output3s
 The utility has been tested using a cluster of machines, via Google Cloud.
 
 I've used 3 e2-standard-8 machines, for a total of 24 vCPUs, to perform strong scalability tests with a fixed number of bytes as input and varying the number of processors.
+Subsequently, I've used 4 e2-standard-8 machines, for a total of 32 vCPUs and 16 actual slots, after the regional limit was increased.
+
 Tests were done using a fair workload, automatically generated using the scripts found in the directory, to ensure reliable results.
 The scripts supplied in the repo are meant for easy local testing. To adapt them in a clustered environment, make sure that every node has the same test directory. (For example, create it in the master and then send it to all the other nodes)
 
@@ -303,13 +305,11 @@ Here's a chart representing just that:
 There's something strange happening to the algorithm, as soon as we go from 4 processes to 5.
 It briefly worsens its performance, then starts scaling again but it's a bit slower than before.
 After quite a bit of testing and fiddling with google cloud VMs, I've discovered that the number of vCPUs isn't the actual core number of the CPU.
-While this explains a lot of things, we cannot be sure of the exact behaviour of the environment, but this is my guess, and below you will find further evidence that it may not be that far from the truth.
-
 In reality, vCPUs are computed as no. of Cores times no. of Threads per core.
 
 This means that in e2-standard-8 VMs, there are actually 4 cores and 2 threads per CPU.
 Based on this assumption, my guess, which is also backed up by further evidence, is that as soon as we go from 4 processes to 5, MPI is basically oversubscribing the 4 cores he can actually see, thus worsening relative performance compared to a situation where each process can work on a separate core.
-I've performed similar tests on e2-standard-4 machines, and guess what? On those machines, the threshold after which the strange behaviour happens is no longer 4, but 2...just like the number of actual cores in that case!
+I've performed similar tests on e2-standard-4 machines, and the behaviour is the same, this time the bottleneck is at 2 cores instead of 4.
 
 Another thing is that, with an e2-standard-8 machine, simply running mpirun -np x with x > 4, without explicit oversubscribing, results in the following error:
 
@@ -358,11 +358,9 @@ Nonetheless, here's a table that summarizes results, in terms of speedup, when w
 | 24         | 1.434171  | 12.810077 |
 
 Even with what we previously said, the algorithm doesn't show a bad performance at all. It manages to have a pretty decent and steady speedup. But it's clear how our considerations impact its performance. So I wanted to see what would happen If, instead of using all the vCPUs on the machines, I'd only use the actual cores.
+Initially the regional limit was 24 vCPUs, but I managed to get it increased to 32 vCPUs, to reach 16 actual cores in my testing.
 
-This would mean that, with 3 e2-standard-8 machines, the total number of actual cores would be 12.
-(Be aware of the fact that I only stopped at 24 vCPUs because there's a regional limit on how many vCPUs you can have active)
-
-Guess what happens when you only use the actual cores, which is -np 4, in this case, for every machine? It literally flies.
+When you only use the actual cores, which is -np 4, in this case, for every machine, it literally flies.
 
 ![Strong Scaling](data/imgs/cores_strong_scaling_dark.png#gh-dark-mode-only)
 ![Strong Scaling](data/imgs/cores_strong_scaling_light.png#gh-light-mode-only)
@@ -383,17 +381,16 @@ As we can see, by varying the size of the input, we get stronger gains, relative
 | 10         | 1.9778902  | 9.2501585  |
 | 11         | 1.8789884  | 9.7370467  |
 | 12         | 1.7424422  | 10.5000888 |
+| 13         | 1.6379872  | 11.1763687 |
+| 14         | 1.5454143  | 11.8410921 |
+| 15         | 1.4645716  | 12.4991484 |
+| 16         | 1.3920819  | 13.1371115 |
 
-This time, the speedup for 12 processors is 10.5, which is much closer to 12, against the 7.4 we obtained previously!
+This time, the speedup for 16 processors is 13.1, which is much closer to 16, against the 9.4 we obtained previously!
 
 Here's a chart to better visualize it:
 ![Speedup Compare](data/imgs/speedup_compare_dark.png#gh-dark-mode-only)
 ![Speedup Compare](data/imgs/speedup_compare_light.png#gh-light-mode-only)
-The dip when we go over the actual number of slots per machine is even more apparent.
-
-After even more fiddling, I've discovered that you can change the ratio between vCPUS and actual cores to 1/1, and create custom machines that utilize 8 full cores.
-
-But this, sadly, doesn't solve the problem, as Google Cloud still bills you like there's double the amount of vCPUs, and it affects regional limits, thus making it impossible to have 24 actual cores. What I mean is, if I configure a custom machine with 4 cores and 1 vCPU per core, in order to make htop and MPI see all slots available, it still counts in regional limits as 8 vCPUs. And the same reasoning applies If I want to configure a machine with 8 cores. So If I configure, for example, 3 machines with 4 actual cores and 1 vCPU per core, Google Cloud still thinks I've used 24 vCPUs, even if there are actually 12 slots, and we're back to square one.“
 
 ### Weak Scalability
 
@@ -403,18 +400,22 @@ The results of the weak scalability testing are summarised in the following tabl
 
 | PROCESSORS |  TIME     | Efficiency  |
 |------------|-----------|-------------|
-| 1          | 1,0294909 | 100,0000000 |
-| 2          | 1,0707393 | 96,1476711  |
-| 3          | 1,0867302 | 94,7328877  |
-| 4          | 1,0892999 | 94,5094092  |
-| 5          | 1,0985009 | 93,7178021  |
-| 6          | 1,1132747 | 92,4741126  |
-| 7          | 1,1176962 | 92,1082938  |
-| 8          | 1,1435514 | 90,0257653  |
-| 9          | 1,1468319 | 89,7682476  |
-| 10         | 1,1502241 | 89,5035063  |
-| 11         | 1,1570636 | 88,9744436  |
-| 12         | 1,1605109 | 88,7101448  |
+| 1          | 1.0294909 | 100.000000 |
+| 2          | 1.0707393 | 96.147671  |
+| 3          | 1.0867302 | 94.732887  |
+| 4          | 1.0892999 | 94.509409  |
+| 5          | 1.0985009 | 93.717802  |
+| 6          | 1.1132747 | 92.474112  |
+| 7          | 1.1176962 | 92.108293  |
+| 8          | 1.1435514 | 90.025765  |
+| 9          | 1.1468319 | 89.768247  |
+| 10         | 1.1502241 | 89.503506  |
+| 11         | 1.1570636 | 88.974443  |
+| 12         | 1.1605109 | 88.710144  |
+| 13         | 1.1639711 | 88.452464  |
+| 14         | 1.1674517 | 88.199203  |
+| 15         | 1.1709529 | 87.948601  |
+| 16         | 1.1744749 | 87.700572  |
 
 As we can see, with medium filesizes the efficiency tends to stay above 90%, although it steadily drops when we increase the number of processors, due to communication overhead, keeps steadily dropping the more we increase the number of processes.
 Here's a chart to better visualize this result:
@@ -424,7 +425,7 @@ Here's a chart to better visualize this result:
 
 We can see how the algorithm might be improved, in terms of efficiency, to handle workloads without excessive communication between workers.
 
-Right now, the efficiency is tolerable, but depending on the context of the application, there are certainly a lot of things we can fine-tune to reach optimal efficiency.
+Right now, the efficiency is ok as it tends to hoover around 85%, but depending on the context of the application, there are certainly a lot of things we can fine-tune to reach optimal efficiency.
 
 For example, we could implement a way to avoid making each process communicate to recover the split words, by implementing a way to make each process "peek" forward or backwards. Such a solution would reduce communication to what is strictly necessary (gathering of partial results) and possibly increase efficiency as the number of processors increases.
 
