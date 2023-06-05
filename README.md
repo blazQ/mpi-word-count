@@ -300,7 +300,7 @@ First things first, let's analyze the results for 24 vCPUs, on all filesizes.
 Here's a chart representing just that:
 
 ![Strong Scaling_vCPUs](data/imgs/vcpus_strong_scaling_dark.png#gh-dark-mode-only)
-![Strong Scaling_vCPUs](data/imgs/vcpus_strong_scaling_light.pngg#gh-light-mode-only)
+![Strong Scaling_vCPUs](data/imgs/vcpus_strong_scaling_light.png#gh-light-mode-only)
 
 There's something strange happening to the algorithm, as soon as we go from 4 processes to 5.
 It briefly worsens its performance, then starts scaling again but it's a bit slower than before.
